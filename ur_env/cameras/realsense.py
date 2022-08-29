@@ -1,8 +1,11 @@
 import gym.spaces
+import numpy as np
 import pyrealsense2 as rs
 
+from ur_env import base
 
-class RealsenseObservations:
+
+class RealSense(base.Node):
     name = "realsense"
 
     def __init__(self, width: int = 640, height: int = 480):
@@ -16,7 +19,7 @@ class RealsenseObservations:
         self._pipeline.start(config)
         self._config = config
 
-    def __call__(self):
+    def __call__(self, action: base.Action) -> base.Observation:
         frames = self._pipeline.wait_for_frames()
         depth = frames.get_depth_frame()
         color = frames.get_color_frame()
@@ -29,10 +32,10 @@ class RealsenseObservations:
         )
 
     @property
-    def action_space(self):
+    def observation_space(self):
         shape = (self.width, self.height)
         return {
-            'depth': gym.spaces.Box(0, float('inf'), shape=shape, dtype=float),
-            'image': gym.spaces.Box(0, 255, shape=shape+(3,), dtype=int),
-            'point_cloud': gym.spaces.Box(0, float('inf'), shape=shape+(3,), dtype=float)
+            'depth': gym.spaces.Box(0, float('inf'), shape=shape, dtype=np.float64),
+            'image': gym.spaces.Box(0, 255, shape=shape+(3,), dtype=np.uint8),
+            'point_cloud': gym.spaces.Box(0, float('inf'), shape=shape+(3,), dtype=np.float64)
         }

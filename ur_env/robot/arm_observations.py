@@ -1,4 +1,5 @@
 import gym.spaces
+import numpy as np
 from rtde_receive import RTDEReceiveInterface
 
 from ur_env.consts import OBSERVABLES
@@ -18,6 +19,6 @@ class RobotObservations:
     @property
     def observation_space(self):
         # TODO: replace with an actual shapes from a scheme.
-        return {k: gym.spaces.Box(-1, 1, shape=6, dtype=float) for k in OBSERVABLES}
+        return {k: gym.spaces.Box(-1, 1, shape=6, dtype=np.float32) for k in OBSERVABLES}
 
 
