@@ -1,6 +1,6 @@
 import rtde_control
-from robotiq_preamble import ROBOTIQ_PREAMBLE
 import time
+from .robotiq_preamble import ROBOTIQ_PREAMBLE
 
 
 class RobotiqGripper(object):

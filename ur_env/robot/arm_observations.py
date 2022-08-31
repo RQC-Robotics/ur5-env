@@ -14,11 +14,12 @@ class RobotObservations:
         """While XMLRPC allows to obtain all the observables
         specified by scheme at once
         here we use simple blocking calls."""
-        return {k: getattr(self._rtde_receive, f'get{k}')() for k in OBSERVABLES}
+        obs = {k: getattr(self._rtde_receive, f'get{k}')() for k in OBSERVABLES}
+        return {k: np.asanyarray(v) for k, v in obs.items()}
 
     @property
     def observation_space(self):
         # TODO: replace with an actual shapes from a scheme.
-        return {k: gym.spaces.Box(-1, 1, shape=6, dtype=np.float32) for k in OBSERVABLES}
+        return {k: gym.spaces.Box(-1, 1, shape=(6,), dtype=np.float32) for k in OBSERVABLES}
 
 

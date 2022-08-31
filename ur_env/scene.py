@@ -1,4 +1,5 @@
 from typing import Optional, List, Type
+from collections import OrderedDict
 
 import gym
 from rtde_control import RTDEControlInterface
@@ -28,24 +29,24 @@ class Scene:
             realsense
         )
 
-    def __call__(self, action: base.Action) -> base.Observation:
-        observations = {}
+    def step(self, action: base.Action) -> base.Observation:
+        observations = OrderedDict()
         for node in self._nodes:
-            observations.update(node(action))
+            observations.update(node.step(action))
         return observations
 
     @property
     def observation_space(self):
-        obs_spec = {}
-        for node in self._nodes:
-            obs_spec.update(node.observation_space)
-        return obs_spec
+        obs_specs = OrderedDict()
+        [obs_specs.update(node.observation_space) for node in self._nodes]
+        return obs_specs
 
     @property
     def action_space(self):
-        act_spec = {}
-        [act_spec.update(node.action_space) for node in self._nodes]
-        return act_spec
+        act_specs = OrderedDict()
+        for node in self._nodes:
+            act_specs[node.name] = node.action_space
+        return act_specs
 
     @classmethod
     def from_str(
@@ -57,6 +58,15 @@ class Scene:
     ):
         """Creates env from config file/params."""
         pass
+
+    # While making things easier it may be replaced in the future.
+    def __getitem__(self, name):
+        """Allows to obtain node by its name."""
+        res = filter(lambda node: node.name == name, self._nodes)
+        try:
+            return next(res)
+        except StopIteration:
+            raise AttributeError(name)
 
 
 def make_controller_and_receive(
@@ -78,8 +88,3 @@ def make_controller_and_receive(
         variables=variables
     )
     return rtdc, rtdr
-
-#
-# def _apply_over_nodes(fn: Callable, *args, nodes: Tuple[base.Node]):
-#     res = [fn(node, *args) for node in nodes]
-#     return res

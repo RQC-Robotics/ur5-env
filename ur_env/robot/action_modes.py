@@ -1,14 +1,13 @@
-from typing import List
 import abc
-import math
+from typing import List
 
 import gym
 import numpy as np
-from rtde_control import RTDEControlInterface as RTDEControl
 from rtde_receive import RTDEReceiveInterface
+from rtde_control import RTDEControlInterface as RTDEControl
 
 from ur_env import base
-from arm_observations import RobotObservations
+from ur_env.robot.arm_observations import RobotObservations
 
 RobotPose = RobotAction = List[float]
 
@@ -22,7 +21,7 @@ class _ActionFn:
 
 
 class ArmActionMode(base.Node):
-    name = "ur5e_arm"
+    name = "ur5"
 
     def __init__(
             self,
@@ -34,9 +33,10 @@ class ArmActionMode(base.Node):
         self._next_pose = None
 
     # TODO: update method: specify action_keys
-    def __call__(self, action: base.Action) -> base.Observation:
-        assert isinstance(action, list) and isinstance(action[0], (int, float)), \
-            f"Wrong action type: {action}"
+    def step(self, action: base.Action) -> base.Observation:
+        action: np.ndarray = action[self.name]
+        action = action.tolist()
+        assert isinstance(action[0], (int, float)), f"Wrong action type: {action}"
         self._pre_action(action)
         self._act_fn(action)
         self._post_action()
@@ -55,7 +55,7 @@ class ArmActionMode(base.Node):
         # next_pose = self._estimate_next_pose(action)
         # assert self._rtde_control.isPoseWithinSafetyLimits(next_pose)
         return 1
-        
+
     def _post_action(self):
         """Checks if action results in a valid and safe pose."""
         return 1
@@ -64,8 +64,8 @@ class ArmActionMode(base.Node):
     def _act_fn(self, action: RobotAction) -> bool:
         """Function of RTDEControlInterface to call."""
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def action_space(self) -> gym.Space:
         """gym-like action_space."""
 
@@ -84,8 +84,8 @@ class TCPPosition(ArmActionMode):
     @property
     def action_space(self) -> gym.Space:
         return gym.spaces.Box(
-            low=3 * [-float('inf')] + 3 * [0.],
-            high=3 * [float('inf')] + 3 * [math.pi],
+            low=np.array(3 * [-np.inf] + 3 * [0.], dtype=np.float32),
+            high=np.array(3 * [np.inf] + 3 * [np.pi], dtype=np.float32),
             shape=(6,),
             dtype=np.float32
         )
