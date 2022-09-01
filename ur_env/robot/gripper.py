@@ -9,11 +9,9 @@ from ur_env import base
 from ur_env.third_party.robotiq_gripper_control import RobotiqGripper
 
 
-# TODO: replace gripper control with non-blocking version via urcap.
-#   add gripper observations.
+# TODO: replace gripper control with non-blocking version via URCap.
 class GripperActionMode(base.Node, abc.ABC):
-    """Since there is no receiver for gripper
-    observations and actions streams are connected."""
+    """Robotiq gripper."""
     name = "gripper"
 
     def __init__(
@@ -28,12 +26,15 @@ class GripperActionMode(base.Node, abc.ABC):
         gripper.set_speed(speed)
         self._gripper = gripper
 
+    # todo: get gripper state
+    def get_observation(self) -> base.Observation:
+        return {}
+
 
 class Discrete(GripperActionMode):
     """Opens or closes gripper."""
-    def step(self, action: base.Action) -> base.Observation:
+    def step(self, action: base.Action):
         self._gripper.close() if action == 1 else self._gripper.open()
-        return action
 
     @property
     def action_space(self) -> base.ActionSpec:
@@ -47,10 +48,9 @@ class Discrete(GripperActionMode):
 # TODO: BROKEN
 class Continuous(GripperActionMode):
     """Moves gripper by `action` mm."""
-    def step(self, action: base.Action) -> base.Observation:
+    def step(self, action: base.Action):
         self._gripper.move(action)
         self._pos += action
-        return self._pos
 
     @property
     def action_space(self) -> base.ActionSpec:

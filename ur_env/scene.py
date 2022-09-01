@@ -1,15 +1,16 @@
+import abc
 import functools
 import dataclasses
 from collections import OrderedDict
-from typing import Optional, List, Type, Mapping
+from typing import Optional, List, Type, Mapping, Literal
 
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
 
 from ur_env import base
-from ur_env.gripper import GripperActionMode, Continuous, Discrete
 from ur_env.cameras.realsense import RealSense
-from ur_env.robot.action_modes import ArmActionMode, TCPPosition
+from ur_env.robot.arm import ArmActionMode, TCPPosition
+from ur_env.robot.gripper import GripperActionMode, Continuous, Discrete
 
 
 @dataclasses.dataclass(frozen=True)
@@ -25,12 +26,20 @@ class SceneConfig:
     height: int = 480
 
     # UR & Robotiq
-    arm_action_mode: str = "TCPPosition"
-    gripper_action_mode: str = "Discrete"
+    arm_action_mode: Literal["TCPPosition"] = "TCPPosition"
+    gripper_action_mode: Literal["Discrete", "Continuous"] = "Discrete"
 
 
-# Append new nodes method
+_ACTION_MODES = dict(
+    TCPPosition=TCPPosition,
+    Discrete=Discrete,
+    Continuous=Continuous
+)
+
+
 class Scene:
+    """Object that contains all nodes.
+    and implements action -> observation step."""
     def __init__(
             self,
             rtde_control: RTDEControlInterface,
@@ -43,6 +52,8 @@ class Scene:
         gripper_action_mode = gripper_action_mode(rtde_control)
         self._rtde_control = rtde_control
         self._rtde_receive = rtde_receive
+        # Order of nodes does matter for action.
+        #   ex.: move arm first then gripper.
         self._nodes = (
             arm_action_mode,
             gripper_action_mode,
@@ -53,6 +64,14 @@ class Scene:
         observations = OrderedDict()
         for node in self._nodes:
             observations.update(node.step(action))
+
+    def get_observation(self):
+        observations = OrderedDict()
+        for node in self._nodes:
+            obs = node.get_observation()
+            if not isinstance(obs, Mapping):
+                obs = {node.name: obs}
+            observations.update(obs)
         return observations
 
     @functools.cached_property
@@ -86,12 +105,11 @@ class Scene:
             config.frequency,
             variables
         )
-        # TODO: replace unsafe eval.
         return cls(
             rtdc,
             rtdr,
-            eval(config.arm_action_mode),
-            eval(config.gripper_action_mode),
+            _ACTION_MODES[config.arm_action_mode],
+            _ACTION_MODES[config.gripper_action_mode],
             RealSense(width=config.width, height=config.height)
         )
 
@@ -111,6 +129,35 @@ class Scene:
     @property
     def rtde_receive(self):
         return self._rtde_receive
+
+    @property
+    def nodes(self):
+        return self._nodes
+
+
+class Task(abc.ABC):
+    """RL task should probably implement following methods."""
+    # Such they are in dm_control.
+
+    @abc.abstractmethod
+    def get_observation(self, scene):
+        """Returns observation from the environment."""
+
+    @abc.abstractmethod
+    def get_reward(self, scene):
+        """Returns reward from the environment."""
+
+    @abc.abstractmethod
+    def get_termination(self, scene):
+        """If the episode should end, returns a final discount, otherwise None."""
+
+    @abc.abstractmethod
+    def action_space(self, scene):
+        """Action space."""
+
+    @abc.abstractmethod
+    def observation_space(self, scene):
+        """Observation space."""
 
 
 def make_controller_and_receiver(

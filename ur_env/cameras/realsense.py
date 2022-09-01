@@ -11,6 +11,7 @@ from ur_env import base
 
 
 class RealSense(base.Node):
+    """Intel RealSense D455."""
     name = "realsense"
 
     def __init__(self, height: int = 480, width: int = 640):
@@ -25,7 +26,7 @@ class RealSense(base.Node):
         self._profile = pipeline.start(config)
         self._config = config
 
-    def step(self, action: base.Action) -> base.Observation:
+    def get_observation(self) -> base.Observation:
         frames = self._pipeline.wait_for_frames()
         depth = frames.get_depth_frame()
         color = frames.get_color_frame()

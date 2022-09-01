@@ -7,9 +7,9 @@ from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface as RTDEControl
 
 from ur_env import base
-from ur_env.robot.arm_observations import RobotObservations
+from ur_env.consts import OBSERVABLES
 
-RobotPose = RobotAction = List[float]
+RTDEPose = RTDEAction = List[float]
 
 
 class _ActionFn:
@@ -20,7 +20,27 @@ class _ActionFn:
     TCPVelocity = RTDEControl.speedL
 
 
+# TODO: parse scheme from an outer file: xml/yaml
+class ArmObservation:
+    """Polls receiver multiple times to gel all possible observations."""
+    def __init__(self, rtdr: RTDEReceiveInterface):
+        self._rtde_receive = rtdr
+
+    def __call__(self):
+        """While XMLRPC allows to obtain all the observables
+        specified by scheme at once
+        here we use simple blocking calls."""
+        obs = {k: getattr(self._rtde_receive, f'get{k}')() for k in OBSERVABLES}
+        return {k: np.asanyarray(v) for k, v in obs.items()}
+
+    @property
+    def observation_space(self):
+        # TODO: replace with an actual shapes from a scheme.
+        return {k: gym.spaces.Box(-1, 1, shape=(6,), dtype=np.float32) for k in OBSERVABLES}
+
+
 class ArmActionMode(base.Node):
+    """UR5e arm."""
     name = "ur5"
 
     def __init__(
@@ -29,25 +49,27 @@ class ArmActionMode(base.Node):
             rtde_receive: RTDEReceiveInterface
     ):
         self._rtde_control = rtde_control
-        self._observation = RobotObservations(rtde_receive)
+        self._observation = ArmObservation(rtde_receive)
         self._next_pose = None
 
     # TODO: update method: specify action_keys
-    def step(self, action: base.Action) -> base.Observation:
+    def step(self, action: base.Action):
         action: np.ndarray = action[self.name]
         action = action.tolist()
         assert isinstance(action[0], (int, float)), f"Wrong action type: {action}"
         self._pre_action(action)
         self._act_fn(action)
         self._post_action()
+
+    def get_observation(self) -> base.Observation:
         return self._observation()
 
     @abc.abstractmethod
-    def _estimate_next_pose(self, action: RobotAction) -> RobotPose:
+    def _estimate_next_pose(self, action: RTDEAction) -> RTDEPose:
         """Next pose can be used to predict if safety limits
         would not be violated."""
 
-    def _pre_action(self, action: RobotAction) -> bool:
+    def _pre_action(self, action: RTDEAction) -> bool:
         """Checks if an action can be done."""
         assert self._rtde_control.isConnected(), "Not connected."
         assert self._rtde_control.isProgramRunning(), "Program is not running."
@@ -61,7 +83,7 @@ class ArmActionMode(base.Node):
         return 1
 
     @abc.abstractmethod
-    def _act_fn(self, action: RobotAction) -> bool:
+    def _act_fn(self, action: RTDEAction) -> bool:
         """Function of RTDEControlInterface to call."""
 
     @property
@@ -75,10 +97,10 @@ class ArmActionMode(base.Node):
 
 
 class TCPPosition(ArmActionMode):
-    def _estimate_next_pose(self, action: RobotAction) -> RobotPose:
+    def _estimate_next_pose(self, action: RTDEAction) -> RTDEPose:
         return action
     
-    def _act_fn(self, action: RobotAction) -> bool:
+    def _act_fn(self, action: RTDEAction) -> bool:
         return _ActionFn.TCPPosition(self._rtde_control, action)
 
     @property
