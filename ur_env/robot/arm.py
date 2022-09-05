@@ -1,5 +1,6 @@
 import abc
 from typing import List
+from collections import OrderedDict
 
 import gym
 import numpy as np
@@ -7,7 +8,6 @@ from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface as RTDEControl
 
 from ur_env import base
-from ur_env.consts import OBSERVABLES
 
 RTDEPose = RTDEAction = List[float]
 
@@ -20,23 +20,33 @@ class _ActionFn:
     TCPVelocity = RTDEControl.speedL
 
 
-# TODO: parse scheme from an outer file: xml/yaml
 class ArmObservation:
-    """Polls receiver multiple times to gel all possible observations."""
-    def __init__(self, rtdr: RTDEReceiveInterface):
-        self._rtde_receive = rtdr
+    """Polls receiver multiple times to gel all the observations specified in a scheme."""
+    def __init__(self,
+                 rtde_r: RTDEReceiveInterface,
+                 schema: OrderedDict,
+                 ):
+        self._rtde_r = rtde_r
+        self._schema = schema
 
     def __call__(self):
-        """While XMLRPC allows to obtain all the observables
-        specified by scheme at once
-        here we use simple blocking calls."""
-        obs = {k: getattr(self._rtde_receive, f'get{k}')() for k in OBSERVABLES}
-        return {k: np.asanyarray(v) for k, v in obs.items()}
+        obs = OrderedDict()
+        for key in self._schema.keys():
+            value = getattr(self._rtde_r, f"get{key}")()
+            obs[key] = np.asarray(value)
+        return obs
 
     @property
     def observation_space(self):
-        # TODO: replace with an actual shapes from a scheme.
-        return {k: gym.spaces.Box(-1, 1, shape=(6,), dtype=np.float32) for k in OBSERVABLES}
+        obs_space = OrderedDict()
+        _types = dict(int=np.int)
+        for key, spec_dict in self._schema.items():
+            obs_space[key] = gym.spaces.Box(
+                low=-np.inf, high=np.inf,
+                shape=tuple(spec_dict["shape"]),
+                dtype=_types.get(spec_dict["dtype"], default=np.float32)
+            )
+        return obs_space
 
 
 class ArmActionMode(base.Node):
@@ -45,14 +55,14 @@ class ArmActionMode(base.Node):
 
     def __init__(
             self,
-            rtde_control: RTDEControl,
-            rtde_receive: RTDEReceiveInterface
+            rtde_c: RTDEControl,
+            rtde_r: RTDEReceiveInterface,
+            schema: OrderedDict
     ):
-        self._rtde_control = rtde_control
-        self._observation = ArmObservation(rtde_receive)
+        self._rtde_c = rtde_c
+        self._observation = ArmObservation(rtde_r, schema)
         self._next_pose = None
 
-    # TODO: update method: specify action_keys
     def step(self, action: base.Action):
         action: np.ndarray = action[self.name]
         action = action.tolist()
@@ -71,11 +81,11 @@ class ArmActionMode(base.Node):
 
     def _pre_action(self, action: RTDEAction) -> bool:
         """Checks if an action can be done."""
-        assert self._rtde_control.isConnected(), "Not connected."
-        assert self._rtde_control.isProgramRunning(), "Program is not running."
-        assert self._rtde_control.isSteady(), "Previous action is not finished."
+        assert self._rtde_c.isConnected(), "Not connected."
+        assert self._rtde_c.isProgramRunning(), "Program is not running."
+        assert self._rtde_c.isSteady(), "Previous action is not finished."
         # next_pose = self._estimate_next_pose(action)
-        # assert self._rtde_control.isPoseWithinSafetyLimits(next_pose)
+        # assert self._rtde_c.isPoseWithinSafetyLimits(next_pose)
         return 1
 
     def _post_action(self):
@@ -101,7 +111,14 @@ class TCPPosition(ArmActionMode):
         return action
     
     def _act_fn(self, action: RTDEAction) -> bool:
-        return _ActionFn.TCPPosition(self._rtde_control, action)
+        path = self._fracture_trajectory(action, 10)
+        return _ActionFn.TCPPosition(self._rtde_c, path)
+
+    @staticmethod
+    def _fracture_trajectory(action, n=5):
+        delta = np.asarray(action) / n
+        path = [(delta * i).to_list() for i in range(1, n+1)]
+        return path
 
     @property
     def action_space(self) -> gym.Space:

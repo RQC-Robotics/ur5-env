@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ur_observations>
-    <recipe key="actual">
-        <field name="ActualQ" type="asd" shape="3,3"/>
-    </recipe>
-</ur_observations>
