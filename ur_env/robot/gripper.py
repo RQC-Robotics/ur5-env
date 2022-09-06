@@ -3,10 +3,9 @@ from typing import Optional
 
 import gym
 import numpy as np
-from rtde_control import RTDEControlInterface
 
 from ur_env import base
-from ur_env.third_party.robotiq_gripper_control import RobotiqGripper
+from ur_env.third_party.robotiq_gripper import RobotiqGripper
 
 
 # TODO: replace gripper control with non-blocking version via URCap.
@@ -16,25 +15,35 @@ class GripperActionMode(base.Node, abc.ABC):
 
     def __init__(
             self,
-            rtde_c: RTDEControlInterface,
-            force: Optional[int] = 100,
-            speed: Optional[int] = 100
+            host: str,
+            port: Optional[int] = 63352,
+            force: Optional[int] = 255,
+            speed: Optional[int] = 255
     ):
-        gripper = RobotiqGripper(rtde_c)
-        self._pos = gripper.activate()
-        gripper.set_force(force)
-        gripper.set_speed(speed)
+        """Pos, speed and force are constrained in [0, 255]."""
+        gripper = RobotiqGripper()
+        gripper.connect(host, port)
+        gripper.activate()
+        self._move = lambda pos: gripper.move_and_wait_for_pos(pos, speed, force)
+        self._max_position = gripper.get_max_position()
+        self._min_position = gripper.get_min_position()
         self._gripper = gripper
 
     def get_observation(self):
+        # There are more options but here only inner grip counts.
+        obj = self._gripper._get_var(self._gripper.OBJ)
+        is_object_detected = obj == RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT
+
         return {
-            "pose": self._gripper.get_pose() / 100.,
-            "object_detected": float(self._gripper.is_object_detected()),
+            "is_closed": float(self._gripper.is_closed()),
+            "pose": self._gripper.get_current_position() / float(self._max_position),
+            "object_detected": float(is_object_detected),
         }
 
     @property
     def observation_space(self):
         return {
+            "is_closed": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
             "pose": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
             "object_detected": gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
         }
@@ -42,20 +51,19 @@ class GripperActionMode(base.Node, abc.ABC):
 
 class Discrete(GripperActionMode):
     """Opens or closes gripper."""
+
     def step(self, action: base.Action):
-        action = action[self.name]
-        self._gripper.close() if action == 1 else self._gripper.open()
+        self._move(self._max_position if action > 0.5 else self._min_position)
 
     @property
     def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Discrete(2)
+        return gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
 
 
 class Continuous(GripperActionMode):
     """Moves gripper by `action` mm."""
     def step(self, action: base.Action):
-        action = action[self.name]
-        self._gripper.move(int(action))
+        self._move(action)
 
     @property
     def action_space(self) -> base.ActionSpec:

@@ -20,7 +20,7 @@ from ur_env.robot.gripper import GripperActionMode, Continuous, Discrete
 class SceneConfig:
     # RTDE
     host: str = "10.201.2.179"
-    port: int = 50002
+    arm_port: int = 50002
     frequency: float = -1.
 
     # UR
@@ -32,6 +32,7 @@ class SceneConfig:
     height: int = 480
 
     # Robotiq
+    gripper_port: int = 63352
     force: int = 100
     speed: int = 100
     gripper_action_mode: Literal["Discrete", "Continuous"] = "Discrete"
@@ -68,7 +69,8 @@ class Scene:
         )
 
     def step(self, action: base.Action):
-        [node.step(action) for node in self._nodes]
+        for node in self._nodes:
+            node.step(action[node.name])
 
     def get_observation(self):
         observations = OrderedDict()
@@ -104,7 +106,7 @@ class Scene:
         
         rtde_c, rtde_r, client = robot_interfaces_factory(
             cfg.host,
-            cfg.port,
+            cfg.arm_port,
             cfg.frequency,
             variables
         )
@@ -113,7 +115,7 @@ class Scene:
             rtde_r,
             client,
             _ACTION_MODES[cfg.arm_action_mode](rtde_c, rtde_r, schema),
-            _ACTION_MODES[cfg.gripper_action_mode](rtde_c, cfg.force, cfg.speed),
+            _ACTION_MODES[cfg.gripper_action_mode](cfg.gripper_port, cfg.force, cfg.speed),
             RealSense(width=cfg.width, height=cfg.height)
         )
 

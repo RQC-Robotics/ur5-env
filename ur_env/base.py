@@ -3,16 +3,23 @@ from typing import Any, Mapping
 
 import gym.spaces
 
-Observation = Action = Mapping[str, Any]
-ObservationSpec = ActionSpec = Mapping[str, gym.Space]
+Observation = Mapping[str, Any]
+ObservationSpec = Mapping[str, gym.Space]
+Action = Any
+ActionSpec = gym.Space
 
 
 class Node(abc.ABC):
-    """Describes how device should act and update state.
-    By default node isn't controllable."""
+    """
+    Describes how device should act and update state.
+    By default node is uncontrollable.
+    """
 
     def step(self, action: Action):
-        """Perform action and update state."""
+        """
+        Performs action and update state.
+        NoOp by default.
+        """
 
     @abc.abstractmethod
     def get_observation(self) -> Observation:
@@ -21,7 +28,7 @@ class Node(abc.ABC):
     @property
     def action_space(self) -> ActionSpec:
         """gym-like action space mapping."""
-        return {}
+        return None
 
     @property
     @abc.abstractmethod

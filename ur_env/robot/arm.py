@@ -4,7 +4,6 @@ from collections import OrderedDict
 
 import gym
 import numpy as np
-import rtde_control
 from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface as RTDEControl
 
@@ -19,11 +18,10 @@ class _ActionFn:
     JointTorque = RTDEControl.servoJ
     TCPPosition = RTDEControl.moveL
     TCPVelocity = RTDEControl.speedL
-    MovePath = RTDEControl.movePath
 
 
 class ArmObservation:
-    """Polls receiver multiple times to gel all the observations specified in a scheme."""
+    """Polls receiver multiple times to get all the observations specified in a scheme."""
     def __init__(self,
                  rtde_r: RTDEReceiveInterface,
                  schema: OrderedDict,
@@ -67,7 +65,6 @@ class ArmActionMode(base.Node):
         self._next_pose = None
 
     def step(self, action: base.Action):
-        action: np.ndarray = action[self.name]
         action = action.tolist()
         assert isinstance(action[0], (int, float)), f"Wrong action type: {action}"
         self._pre_action(action)
@@ -100,11 +97,6 @@ class ArmActionMode(base.Node):
         """Function of RTDEControlInterface to call."""
 
     @property
-    @abc.abstractmethod
-    def action_space(self) -> gym.Space:
-        """gym-like action_space."""
-
-    @property
     def observation_space(self) -> base.ObservationSpec:
         return self._observation.observation_space
 
@@ -116,16 +108,14 @@ class TCPPosition(ArmActionMode):
     def _act_fn(self, action: RTDEAction) -> bool:
         pose = self._rtde_r.getActualTCPPose()
         path = fracture_trajectory(pose, action)
-        rtde_c_path = rtde_control.Path()
+
+        # Use movePath when workaround for pybindings bug is found
+        # gitlab.com/sdurobotics/ur_rtde/-/issues/85
+        success = 1
         for pose in path:
-            pose = rtde_control.PathEntry(
-                rtde_control.PathEntry.MoveL,
-                rtde_control.PathEntry.PositionTcpPose,
-                pose
-            )
-            rtde_c_path.addEntry(pose)
-        return _ActionFn.MovePath(self._rtde_c, rtde_c_path)
-        # return _ActionFn.MovePath(self._rtde_c, path)
+            speed, acceleration = pose[-3:-1]
+            success *= _ActionFn.TCPPosition(self._rtde_c, pose[:-3], speed, acceleration)
+        return success
 
     @property
     def action_space(self) -> gym.Space:
