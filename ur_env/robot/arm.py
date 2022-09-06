@@ -44,7 +44,7 @@ class ArmObservation:
             obs_space[key] = gym.spaces.Box(
                 low=-np.inf, high=np.inf,
                 shape=tuple(spec_dict["shape"]),
-                dtype=_types.get(spec_dict["dtype"], default=np.float32)
+                dtype=_types.get(spec_dict["dtype"], np.float32)
             )
         return obs_space
 
@@ -114,7 +114,8 @@ class TCPPosition(ArmActionMode):
     def _act_fn(self, action: RTDEAction) -> bool:
         pose = self._rtde_r.getActualTCPPose()
         path = fracture_trajectory(pose, action)
-        return _ActionFn.TCPPosition(self._rtde_c, path)
+        _ActionFn.TCPPosition(self._rtde_c, path)
+        return self._rtde_c.stopScript()
 
     @property
     def action_space(self) -> gym.Space:
@@ -131,7 +132,7 @@ def fracture_trajectory(
         end: Union[List[float], np.ndarray],
         waypoints: int = 10,
         speed: Union[float, List[float]] = 0.25,
-        acceleration: Union[float, List[float]] = 1.2,
+        acceleration: Union[float, List[float]] = 0.5,
         blend: Union[float, List[float]] = .0,
 ):
     """

@@ -171,7 +171,7 @@ def load_schema(path: str):
     """
     if path is None:
         path = pathlib.Path(__file__).parent
-        path = path / "robot" / "observations_scheme.yaml"
+        path = path / "robot" / "observations_schema.yaml"
     yaml = YAML()
     with open(path) as file:
         schema = yaml.load(file)
@@ -201,10 +201,14 @@ def robot_interfaces_factory(
     )
     rtde_r = RTDEReceiveInterface(
         host,
-        port=port,
         frequency=frequency,
         variables=variables
     )
 
     dashboard = DashboardClient(host)
+
+    dashboard.connect()
+    assert rtde_r.isConnected()
+    assert rtde_c.isConnected()
+
     return rtde_c, rtde_r, dashboard
