@@ -4,6 +4,7 @@ from collections import OrderedDict
 
 import gym
 import numpy as np
+import rtde_control
 from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface as RTDEControl
 
@@ -18,6 +19,7 @@ class _ActionFn:
     JointTorque = RTDEControl.servoJ
     TCPPosition = RTDEControl.moveL
     TCPVelocity = RTDEControl.speedL
+    MovePath = RTDEControl.movePath
 
 
 class ArmObservation:
@@ -114,8 +116,16 @@ class TCPPosition(ArmActionMode):
     def _act_fn(self, action: RTDEAction) -> bool:
         pose = self._rtde_r.getActualTCPPose()
         path = fracture_trajectory(pose, action)
-        _ActionFn.TCPPosition(self._rtde_c, path)
-        return self._rtde_c.stopScript()
+        rtde_c_path = rtde_control.Path()
+        for pose in path:
+            pose = rtde_control.PathEntry(
+                rtde_control.PathEntry.MoveL,
+                rtde_control.PathEntry.PositionTcpPose,
+                pose
+            )
+            rtde_c_path.addEntry(pose)
+        return _ActionFn.MovePath(self._rtde_c, rtde_c_path)
+        # return _ActionFn.MovePath(self._rtde_c, path)
 
     @property
     def action_space(self) -> gym.Space:
