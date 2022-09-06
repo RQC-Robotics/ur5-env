@@ -26,6 +26,19 @@ class GripperActionMode(base.Node, abc.ABC):
         gripper.set_speed(speed)
         self._gripper = gripper
 
+    def get_observation(self):
+        return {
+            "pose": self._gripper.get_pose() / 100.,
+            "object_detected": float(self._gripper.is_object_detected()),
+        }
+
+    @property
+    def observation_space(self):
+        return {
+            "pose": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
+            "object_detected": gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
+        }
+
 
 class Discrete(GripperActionMode):
     """Opens or closes gripper."""
@@ -33,16 +46,8 @@ class Discrete(GripperActionMode):
         action = action[self.name]
         self._gripper.close() if action == 1 else self._gripper.open()
 
-    def get_observation(self):
-        pos = self._gripper.get_pos()
-        return pos != 0
-
     @property
     def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Discrete(2)
-
-    @property
-    def observation_space(self) -> base.ObservationSpec:
         return gym.spaces.Discrete(2)
 
 
@@ -50,16 +55,8 @@ class Continuous(GripperActionMode):
     """Moves gripper by `action` mm."""
     def step(self, action: base.Action):
         action = action[self.name]
-        self._gripper.move(action)
-
-    def get_observation(self):
-        pos = self._gripper.get_pos()
-        return pos / 255.
+        self._gripper.move(int(action))
 
     @property
     def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Box(low=0, high=255, shape=(), dtype=np.float32)
-
-    @property
-    def observation_space(self) -> base.ObservationSpec:
-        return gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32)
+        return gym.spaces.Box(low=0, high=255, shape=(), dtype=np.uint8)

@@ -1,5 +1,5 @@
 import abc
-from typing import List
+from typing import List, Union
 from collections import OrderedDict
 
 import gym
@@ -51,7 +51,7 @@ class ArmObservation:
 
 class ArmActionMode(base.Node):
     """UR5e arm."""
-    name = "ur5"
+    name = "arm"
 
     def __init__(
             self,
@@ -60,6 +60,7 @@ class ArmActionMode(base.Node):
             schema: OrderedDict
     ):
         self._rtde_c = rtde_c
+        self._rtde_r = rtde_r
         self._observation = ArmObservation(rtde_r, schema)
         self._next_pose = None
 
@@ -111,14 +112,9 @@ class TCPPosition(ArmActionMode):
         return action
     
     def _act_fn(self, action: RTDEAction) -> bool:
-        path = self._fracture_trajectory(action, 10)
+        pose = self._rtde_r.getActualTCPPose()
+        path = fracture_trajectory(pose, action)
         return _ActionFn.TCPPosition(self._rtde_c, path)
-
-    @staticmethod
-    def _fracture_trajectory(action, n=5):
-        delta = np.asarray(action) / n
-        path = [(delta * i).to_list() for i in range(1, n+1)]
-        return path
 
     @property
     def action_space(self) -> gym.Space:
@@ -128,3 +124,39 @@ class TCPPosition(ArmActionMode):
             shape=(6,),
             dtype=np.float32
         )
+
+
+def fracture_trajectory(
+        begin: Union[List[float], np.ndarray],
+        end: Union[List[float], np.ndarray],
+        waypoints: int = 10,
+        speed: Union[float, List[float]] = 0.25,
+        acceleration: Union[float, List[float]] = 1.2,
+        blend: Union[float, List[float]] = .0,
+):
+    """
+    Splits trajectory to smaller pieces, so it is
+    easier to find IK solution.
+    """
+    if waypoints == 1:
+        return end
+
+    def _transform_params(x):
+        numeric = isinstance(x, (float, int))
+        assert numeric or len(x) == waypoints,\
+            f"Wrong trajectory specification: {x}."
+
+        if numeric:
+            return np.full(waypoints, x)
+        else:
+            return np.asarray(x)
+
+    params = np.stack(
+        list(map(_transform_params, (speed, acceleration, blend))),
+        axis=-1
+    )
+    begin, end = map(np.asanyarray, (begin, end))
+    path = np.linspace(begin, end, num=waypoints)
+    path = np.concatenate([path, params], axis=-1)
+
+    return list(map(np.ndarray.tolist, path))

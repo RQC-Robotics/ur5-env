@@ -92,5 +92,9 @@ class RobotiqGripper(object):
         """
         return self.call("CLOSE", "rq_close_and_wait()")
 
-    def get_pos(self):
-        return self.call("GET_POSE", "rq_get_position()")
+    # Hereafter will be untested code
+    def get_pose(self):
+        return self.call("GET_POSE", "rq_current_pos_norm()")
+
+    def is_object_detected(self):
+        return self.call("IS_OBJECT_DETECTED", "rq_is_object_detected()")

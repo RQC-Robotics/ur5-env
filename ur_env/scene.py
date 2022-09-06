@@ -1,8 +1,9 @@
-import functools
+from typing import Optional, List, Mapping, Literal, Iterable
+import re
 import pathlib
+import functools
 import dataclasses
 from collections import OrderedDict
-from typing import Optional, List, Mapping, Literal
 
 from ruamel.yaml import YAML
 from rtde_control import RTDEControlInterface
@@ -73,8 +74,7 @@ class Scene:
         observations = OrderedDict()
         for node in self._nodes:
             obs = node.get_observation()
-            if not isinstance(obs, Mapping):
-                obs = {node.name: obs}
+            obs = _name_mangling(node.name, obs)
             observations.update(obs)
         return observations
 
@@ -83,9 +83,7 @@ class Scene:
         obs_specs = OrderedDict()
         for node in self._nodes:
             spec = node.observation_space
-            if not isinstance(spec, Mapping):
-                spec = {node.name: spec}
-            obs_specs.update(spec)
+            obs_specs.update(_name_mangling(node.name, spec))
         return obs_specs
 
     @functools.cached_property
@@ -102,13 +100,13 @@ class Scene:
             cfg: SceneConfig
     ):
         """Creates scene from config."""
-        schema = load_schema(cfg.obs_schema)
+        schema, variables = load_schema(cfg.obs_schema)
         
         rtde_c, rtde_r, client = robot_interfaces_factory(
             cfg.host,
             cfg.port,
             cfg.frequency,
-            list(schema.keys())
+            variables
         )
         return cls(
             rtde_c,
@@ -145,10 +143,31 @@ class Scene:
         return self._dashboard_client
 
 
+def _name_mangling(node_name, obj):
+    """
+    To prevent key collision between different node.
+    But it still can occur if there are two equal node names.
+    """
+    if isinstance(obj, Mapping):
+        mangled = type(obj)()
+        for key, value in obj.items():
+            mangled[f"{node_name}/{key}"] = value
+        return mangled
+    else:
+        obj = {node_name: obj}
+    return obj
+
+
+def _check_for_name_collision(nodes: Iterable[base.Node]):
+    unique_names = set(map(base.Node.name, nodes))
+    assert len(unique_names) == len(nodes),\
+        f"Name collision: {unique_names}"
+
+
 def load_schema(path: str):
     """
     Defines variables that should be transferred between host and robot.
-
+    Schema should contain observables with theirs shapes and dtypes.
     """
     if path is None:
         path = pathlib.Path(__file__).parent
@@ -156,7 +175,15 @@ def load_schema(path: str):
     yaml = YAML()
     with open(path) as file:
         schema = yaml.load(file)
-    return schema
+
+    def _as_rtde_variable(variable):
+        for match in re.findall(r"[A-Z]", variable):
+            variable = variable.replace(match, "_"+match.lower())
+        variable = variable.replace("t_c_p", "TCP")
+        return variable[1:]
+
+    variables = list(map(_as_rtde_variable, schema.keys()))
+    return schema, variables
 
 
 def robot_interfaces_factory(
