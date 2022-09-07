@@ -17,26 +17,33 @@ class GripperActionMode(base.Node, abc.ABC):
             self,
             host: str,
             port: Optional[int] = 63352,
-            force: Optional[int] = 255,
-            speed: Optional[int] = 255
+            force: Optional[int] = 100,
+            speed: Optional[int] = 100
     ):
         """Pos, speed and force are constrained in [0, 255]."""
         gripper = RobotiqGripper()
         gripper.connect(host, port)
         gripper.activate()
-        self._move = lambda pos: gripper.move_and_wait_for_pos(pos, speed, force)
+
+        rescale = lambda x: int(255 * x / 100.)
+        self._move = lambda pos: gripper.move_and_wait_for_pos(
+            pos, rescale(speed), rescale(force)
+        )
         self._max_position = gripper.get_max_position()
         self._min_position = gripper.get_min_position()
         self._gripper = gripper
+        self._obj_status = None
+        self._pos = self._min_position
 
     def get_observation(self):
-        # There are more options but here only inner grip counts.
-        obj = self._gripper._get_var(self._gripper.OBJ)
-        is_object_detected = obj == RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT
+        is_object_detected = self._obj_status in (
+            RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
+            RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
+        )
 
         return {
             "is_closed": float(self._gripper.is_closed()),
-            "pose": self._gripper.get_current_position() / float(self._max_position),
+            "pose": self._pos / float(self._max_position),
             "object_detected": float(is_object_detected),
         }
 
@@ -53,7 +60,9 @@ class Discrete(GripperActionMode):
     """Opens or closes gripper."""
 
     def step(self, action: base.Action):
-        self._move(self._max_position if action > 0.5 else self._min_position)
+        self._pos, self._obj_status = self._move(
+            self._max_position if action > 0.5 else self._min_position
+        )
 
     @property
     def action_space(self) -> base.ActionSpec:
@@ -61,9 +70,9 @@ class Discrete(GripperActionMode):
 
 
 class Continuous(GripperActionMode):
-    """Moves gripper by `action` mm."""
+    """Moves gripper by `action`."""
     def step(self, action: base.Action):
-        self._move(action)
+        self._pos, self._obj_status = self._move(action)
 
     @property
     def action_space(self) -> base.ActionSpec:

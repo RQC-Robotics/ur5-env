@@ -1,3 +1,5 @@
+from typing import List
+
 import gym.spaces
 import numpy as np
 import pyrealsense2 as rs
@@ -15,36 +17,25 @@ class RealSense(base.Node):
     name = "realsense"
 
     def __init__(self, height: int = 480, width: int = 640):
-        self.width = width
-        self.height = height
-        pipeline = rs.pipeline()
-        config = rs.config()
-        config.enable_stream(rs.stream.depth, width, height)
-        config.enable_stream(rs.stream.color, width, height)
-
-        self._pipeline = pipeline
-        self._profile = pipeline.start(config)
-        self._config = config
+        self._width = width
+        self._height = height
+        self._build()
 
     def get_observation(self) -> base.Observation:
-        frames = self._pipeline.wait_for_frames()
-        depth = frames.get_depth_frame()
-        color = frames.get_color_frame()
-        pcd = rs.pointcloud()
-        points = pcd.calculate(depth)
-        vtx = np.asanyarray(points.get_vertices())
-        obs = dict(depth=depth, image=color)
+        frames = [self.capture_frameset() for _ in range(4)]
+        rgb, depth, points = self.postprocess(frames)
+        verts = np.asanyarray(points.get_vertices(2)) \
+            .reshape(self._height, self._width, 3)
+        return {
+            "depth": np.asanyarray(depth.get_data(), dtype=np.float32),
+            "image": np.asanyarray(rgb.get_data(), dtype=np.uint8),
+            "point_cloud": verts
 
-        obs = {k: np.asanyarray(v.get_data())
-               for k, v in obs.items()}
-        obs["points"] = vtx.view(np.float32)\
-            .reshape(-1, 3)
-
-        return obs
+        }
 
     @property
     def observation_space(self):
-        shape = (self.width, self.height)
+        shape = (self._height, self._width)
         return {
             'depth': gym.spaces.Box(0, np.inf, shape=shape, dtype=np.float32),
             'image': gym.spaces.Box(0, 255, shape=shape+(3,), dtype=np.uint8),
@@ -58,4 +49,51 @@ class RealSense(base.Node):
     @property
     def config(self):
         return self._config
+
+    def postprocess(self, frames: List[rs.frame]):
+        depth_temporal = rs.temporal_filter()
+        rgb_temporal = rs.temporal_filter()
+        for frame in frames:
+            depth_frame = depth_temporal.process(
+                frame.get_depth_frame()
+            )
+            rgb_frame = rgb_temporal.process(
+                frame.get_color_frame()
+            )
+        pc = rs.pointcloud()
+        points = pc.calculate(depth_frame)
+        return rgb_frame, depth_frame, points
+
+    def capture_frameset(self):
+        frameset = self._pipeline.wait_for_frames()
+        aligned = self._align.process(frameset)
+        return aligned
+
+    def _build(self):
+        """
+        Most of the following are not required at all
+        but still present here to explore the camera possibilities.
+        """
+        self._pipeline = rs.pipeline()
+        self._config = rs.config()
+        self._align = rs.align(rs.stream.depth)
+        self._pc = rs.pointcloud()
+        self._temporal = rs.temporal_filter()
+        self._decimation = rs.decimation_filter()
+
+        self._config.enable_stream(
+            rs.stream.depth, width=self._width, height=self._height)
+        self._config.enable_stream(
+            rs.stream.color, width=self._width, height=self._height)
+
+        self._profile = self._pipeline.start(self._config)
+
+        # Wait for auto calibration.
+        for _ in range(5):
+            self._pipeline.wait_for_frames()
+
+
+
+
+
 

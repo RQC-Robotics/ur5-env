@@ -1,11 +1,12 @@
 import abc
-from typing import Any, Mapping
+from typing import Mapping, Union
 
 import gym.spaces
+import numpy.typing as npt
 
-Observation = Mapping[str, Any]
+Observation = Mapping[str, npt.ArrayLike]
 ObservationSpec = Mapping[str, gym.Space]
-Action = Any
+Action = npt.ArrayLike
 ActionSpec = gym.Space
 
 

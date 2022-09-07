@@ -1,4 +1,4 @@
-from typing import Optional, List, Mapping, Literal, Iterable
+from typing import Optional, List, Mapping, Literal, Iterable, Tuple
 import re
 import pathlib
 import functools
@@ -21,6 +21,7 @@ class SceneConfig:
     # RTDE
     host: str = "10.201.2.179"
     arm_port: int = 50002
+    gripper_port: int = 63352
     frequency: float = -1.
 
     # UR
@@ -28,11 +29,10 @@ class SceneConfig:
     arm_action_mode: Literal["TCPPosition"] = "TCPPosition"
 
     # RealSense
-    width: int = 640
+    width: int = 848
     height: int = 480
 
     # Robotiq
-    gripper_port: int = 63352
     force: int = 100
     speed: int = 100
     gripper_action_mode: Literal["Discrete", "Continuous"] = "Discrete"
@@ -46,8 +46,9 @@ _ACTION_MODES = dict(
 
 
 class Scene:
-    """Object that contains all nodes.
+    """Object that contains all the nodes.
     and implements action -> observation step."""
+
     def __init__(
             self,
             rtde_c: RTDEControlInterface,
@@ -67,6 +68,7 @@ class Scene:
             gripper_action_mode,
             realsense
         )
+        _check_for_name_collision(self.nodes)
 
     def step(self, action: base.Action):
         for node in self._nodes:
@@ -115,7 +117,7 @@ class Scene:
             rtde_r,
             client,
             _ACTION_MODES[cfg.arm_action_mode](rtde_c, rtde_r, schema),
-            _ACTION_MODES[cfg.gripper_action_mode](cfg.gripper_port, cfg.force, cfg.speed),
+            _ACTION_MODES[cfg.gripper_action_mode](cfg.host, cfg.gripper_port, cfg.force, cfg.speed),
             RealSense(width=cfg.width, height=cfg.height)
         )
 
@@ -166,7 +168,7 @@ def _check_for_name_collision(nodes: Iterable[base.Node]):
         f"Name collision: {unique_names}"
 
 
-def load_schema(path: str):
+def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
     """
     Defines variables that should be transferred between host and robot.
     Schema should contain observables with theirs shapes and dtypes.
