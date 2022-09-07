@@ -19,6 +19,7 @@ from ur_env.robot.gripper import GripperActionMode, Continuous, Discrete
 
 @dataclasses.dataclass(frozen=True)
 class SceneConfig:
+    """Full scene configuration."""
     # RTDE
     host: str = "10.201.2.179"
     arm_port: int = 50002
@@ -47,8 +48,9 @@ _ACTION_MODES = dict(
 
 
 class Scene:
-    """Object that contains all the nodes.
-    and implements action -> observation step."""
+    """Object that holds all the nodes.
+    Can be updated by performing action on it
+    and then queried to obtain observation."""
 
     def __init__(
             self,
@@ -72,10 +74,14 @@ class Scene:
         _check_for_name_collision(self.nodes)
 
     def step(self, action: Mapping[str, base.Action]):
+        """Scene can be updated partially if some nodes are not present in an action.keys()."""
         for node in self._nodes:
-            node.step(action[node.name])
+            node_action = action.get(node.name)
+            if node_action:
+                node.step(node_action)
 
     def get_observation(self) -> base.Observation:
+        """Gathers all observations."""
         observations = OrderedDict()
         for node in self._nodes:
             obs = node.get_observation()
@@ -85,6 +91,7 @@ class Scene:
 
     @functools.cached_property
     def observation_space(self) -> base.ObservationSpec:
+        """Gathers all observation specs."""
         obs_specs = OrderedDict()
         for node in self._nodes:
             spec = node.observation_space
@@ -93,6 +100,7 @@ class Scene:
 
     @functools.cached_property
     def action_space(self) -> Mapping[str, base.ActionSpec]:
+        """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
             if node.action_space:
@@ -118,15 +126,18 @@ class Scene:
             rtde_r,
             client,
             _ACTION_MODES[cfg.arm_action_mode](rtde_c, rtde_r, schema),
-            _ACTION_MODES[cfg.gripper_action_mode](cfg.host, cfg.gripper_port, cfg.force, cfg.speed),
+            _ACTION_MODES[cfg.gripper_action_mode](
+                cfg.host, cfg.gripper_port, cfg.force, cfg.speed),
             RealSense(width=cfg.width, height=cfg.height)
         )
 
-    def shutdown(self):
+    def close(self):
+        """Close all connections, shutdown robot and camera."""
         self._dashboard_client.stop()
-        self._dashboard_client.quit()
         self._rtde_r.disconnect()
         self._rtde_c.disconnect()
+        self._dashboard_client.shutdown()
+        self.realsense.pipeline.stop()
 
     # While making things easier it can cause troubles.
     def __getattr__(self, name):
@@ -164,12 +175,12 @@ def _name_mangling(node_name, obj):
         for key, value in obj.items():
             mangled[f"{node_name}/{key}"] = value
         return mangled
-    else:
-        obj = {node_name: obj}
-    return obj
+
+    return {node_name: obj}
 
 
 def _check_for_name_collision(nodes: List[base.Node]):
+    """It is desirable to have different names for nodes."""
     unique_names = set(map(lambda n: n.name, nodes))
     assert len(unique_names) == len(nodes),\
         f"Name collision: {unique_names}"
@@ -184,7 +195,7 @@ def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
         path = pathlib.Path(__file__).parent
         path = path / "robot" / "observations_schema.yaml"
     yaml = YAML()
-    with open(path) as file:
+    with open(path, encoding="utf-8") as file:
         schema = yaml.load(file)
 
     def _as_rtde_variable(variable):
@@ -203,13 +214,23 @@ def robot_interfaces_factory(
         frequency: Optional[float] = None,
         variables: Optional[List[str]] = None
 ):
-    """Interfaces to communicate with the robot."""
+    """
+    Interfaces to communicate with the robot.
+    Connection can't be established if there exists already opened one.
+    Actually, it will result in an PolyScope error popup.
+    """
     dashboard = DashboardClient(host)
     dashboard.connect()
     assert dashboard.isInRemoteControl(), "Not in remote control"
     dashboard.loadURP("remote.urp")
-    dashboard.play()
-    assert dashboard.running()
+
+    if "POWER_OFF" in dashboard.robotmode():
+        dashboard.powerOn()
+        dashboard.brakeRelease()
+        time.sleep(10)
+
+    # Results in a timeout and there is no params to change such behaviour.
+    # dashboard.play()
 
     rtde_c = RTDEControlInterface(
         host,

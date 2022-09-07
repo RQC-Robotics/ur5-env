@@ -12,14 +12,6 @@ from ur_env import base
 RTDEPose = List[float]
 
 
-class _ActionFn:
-    JointPosition = RTDEControl.moveJ
-    JointVelocity = RTDEControl.speedJ
-    JointTorque = RTDEControl.servoJ
-    TCPPosition = RTDEControl.moveL
-    TCPVelocity = RTDEControl.speedL
-
-
 class ArmObservation:
     """Polls receiver multiple times to get all the observations specified in a scheme."""
     def __init__(self,
@@ -30,6 +22,7 @@ class ArmObservation:
         self._schema = schema
 
     def __call__(self):
+        """Get all observations specified in the schema one by one."""
         obs = OrderedDict()
         for key in self._schema.keys():
             value = getattr(self._rtde_r, f"get{key}")()
@@ -42,7 +35,7 @@ class ArmObservation:
         _types = dict(int=np.int)
         for key, spec_dict in self._schema.items():
             obs_space[key] = gym.spaces.Box(
-                low=-np.inf, high=np.inf,
+                low=-np.inf, high=np.inf,  # limits should also be obtained from the schema.
                 shape=tuple(spec_dict["shape"]),
                 dtype=_types.get(spec_dict["dtype"], np.float32)
             )
@@ -100,6 +93,10 @@ class ArmActionMode(base.Node):
 
 
 class TCPPosition(ArmActionMode):
+    """
+    Act by specifying next pose of the TCP.
+    action = (x,y,z,rx,ry,rz)
+    """
     def _estimate_next_pose(self, action):
         return action.tolist()
     
@@ -111,15 +108,15 @@ class TCPPosition(ArmActionMode):
         # gitlab.com/sdurobotics/ur_rtde/-/issues/85
         success = 1
         for pose in path:
-            speed, acceleration, blend = pose[-3:]
+            speed, acceleration, _ = pose[-3:]
             success *= self._rtde_c.moveL(pose[:-3], speed, acceleration)
         return success
 
     @property
     def action_space(self) -> gym.Space:
         return gym.spaces.Box(
-            low=np.array(3 * [-np.inf] + 3 * [0.], dtype=np.float32),
-            high=np.array(3 * [np.inf] + 3 * [np.pi], dtype=np.float32),
+            low=np.array(3 * [-np.inf] + 3 * [-2*np.pi], dtype=np.float32),
+            high=np.array(3 * [np.inf] + 3 * [2*np.pi], dtype=np.float32),
             shape=(6,),
             dtype=np.float32
         )
@@ -140,15 +137,15 @@ def fracture_trajectory(
     if waypoints == 1:
         return list(end) + [speed, acceleration, blend]
 
-    def _transform_params(x):
-        numeric = isinstance(x, (float, int))
-        assert numeric or len(x) == waypoints,\
-            f"Wrong trajectory specification: {x}."
+    def _transform_params(param):
+        numeric = isinstance(param, (float, int))
+        assert numeric or len(param) == waypoints,\
+            f"Wrong trajectory specification: {param}."
 
         if numeric:
-            return np.full(waypoints, x)
+            return np.full(waypoints, param)
         else:
-            return np.asarray(x)
+            return np.asarray(param)
 
     params = np.stack(
         list(map(_transform_params, (speed, acceleration, blend))),

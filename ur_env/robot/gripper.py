@@ -25,7 +25,9 @@ class GripperActionMode(base.Node, abc.ABC):
         gripper.connect(host, port)
         gripper.activate()
 
-        rescale = lambda x: int(255 * x / 100.)
+        def rescale(x):
+            return int(255 * x / 100.)
+
         self._move = lambda pos: gripper.move_and_wait_for_pos(
             pos, rescale(speed), rescale(force)
         )
@@ -72,7 +74,8 @@ class Discrete(GripperActionMode):
 
 
 class Continuous(GripperActionMode):
-    """Moves gripper by `action`."""
+    """Fine-grained control of a gripper."""
+
     def step(self, action: base.Action):
         self._pos, self._obj_status = self._move(action)
 

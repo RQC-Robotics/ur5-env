@@ -1,5 +1,5 @@
 """Module to control Robotiq's grippers - tested with HAND-E"""
-
+# pylint: skip-file
 import socket
 import threading
 import time

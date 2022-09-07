@@ -51,6 +51,10 @@ class RealSense(base.Node):
         return self._config
 
     def postprocess(self, frames: List[rs.frame]):
+        """
+        Process a sequence of frames.
+        Temporal processing is only useful for static scene.
+        """
         depth_temporal = rs.temporal_filter()
         rgb_temporal = rs.temporal_filter()
         for frame in frames:
@@ -60,11 +64,12 @@ class RealSense(base.Node):
             rgb_frame = rgb_temporal.process(
                 frame.get_color_frame()
             )
-        pc = rs.pointcloud()
-        points = pc.calculate(depth_frame)
+        pcd = rs.pointcloud()
+        points = pcd.calculate(depth_frame)
         return rgb_frame, depth_frame, points
 
     def capture_frameset(self):
+        """Obtains single frameset."""
         frameset = self._pipeline.wait_for_frames()
         aligned = self._align.process(frameset)
         return aligned
@@ -72,14 +77,14 @@ class RealSense(base.Node):
     def _build(self):
         """
         Most of the following are not required at all
-        but still present here to explore the camera possibilities.
+        but still present here to explore and remind camera possibilities.
         """
         self._pipeline = rs.pipeline()
         self._config = rs.config()
         self._align = rs.align(rs.stream.depth)
         self._pc = rs.pointcloud()
         self._temporal = rs.temporal_filter()
-        self._decimation = rs.decimation_filter()
+        # self._decimation = rs.decimation_filter()
 
         self._config.enable_stream(
             rs.stream.depth, width=self._width, height=self._height)
@@ -91,9 +96,3 @@ class RealSense(base.Node):
         # Wait for auto calibration.
         for _ in range(5):
             self._pipeline.wait_for_frames()
-
-
-
-
-
-
