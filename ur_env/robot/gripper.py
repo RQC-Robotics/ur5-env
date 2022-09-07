@@ -31,6 +31,7 @@ class GripperActionMode(base.Node, abc.ABC):
         )
         self._max_position = gripper.get_max_position()
         self._min_position = gripper.get_min_position()
+        self._delta = float(self._max_position - self._min_position)
         self._gripper = gripper
         self._obj_status = None
         self._pos = self._min_position
@@ -40,10 +41,11 @@ class GripperActionMode(base.Node, abc.ABC):
             RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
             RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
         )
+        normed_pos = (self._pos - self._min_position) / self._delta
 
         return {
-            "is_closed": float(self._gripper.is_closed()),
-            "pose": self._pos / float(self._max_position),
+            "is_closed": float(self._pos > self._min_position), #float(self._gripper.is_closed()),
+            "pose": normed_pos,
             "object_detected": float(is_object_detected),
         }
 

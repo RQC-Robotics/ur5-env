@@ -1,5 +1,6 @@
-from typing import Optional, List, Mapping, Literal, Iterable, Tuple
+from typing import Optional, List, Mapping, Literal, Tuple
 import re
+import time
 import pathlib
 import functools
 import dataclasses
@@ -29,7 +30,7 @@ class SceneConfig:
     arm_action_mode: Literal["TCPPosition"] = "TCPPosition"
 
     # RealSense
-    width: int = 848
+    width: int = 640
     height: int = 480
 
     # Robotiq
@@ -61,7 +62,7 @@ class Scene:
         self._rtde_c = rtde_c
         self._rtde_r = rtde_r
         self._dashboard_client = dashboard_client
-        # Order of nodes does matter when acting.
+        # Nodes order does matter when acting.
         #   ex.: move arm first then gripper.
         self._nodes = (
             arm_action_mode,
@@ -70,11 +71,11 @@ class Scene:
         )
         _check_for_name_collision(self.nodes)
 
-    def step(self, action: base.Action):
+    def step(self, action: Mapping[str, base.Action]):
         for node in self._nodes:
             node.step(action[node.name])
 
-    def get_observation(self):
+    def get_observation(self) -> base.Observation:
         observations = OrderedDict()
         for node in self._nodes:
             obs = node.get_observation()
@@ -83,7 +84,7 @@ class Scene:
         return observations
 
     @functools.cached_property
-    def observation_space(self):
+    def observation_space(self) -> base.ObservationSpec:
         obs_specs = OrderedDict()
         for node in self._nodes:
             spec = node.observation_space
@@ -91,7 +92,7 @@ class Scene:
         return obs_specs
 
     @functools.cached_property
-    def action_space(self):
+    def action_space(self) -> Mapping[str, base.ActionSpec]:
         act_specs = OrderedDict()
         for node in self._nodes:
             if node.action_space:
@@ -120,6 +121,12 @@ class Scene:
             _ACTION_MODES[cfg.gripper_action_mode](cfg.host, cfg.gripper_port, cfg.force, cfg.speed),
             RealSense(width=cfg.width, height=cfg.height)
         )
+
+    def shutdown(self):
+        self._dashboard_client.stop()
+        self._dashboard_client.quit()
+        self._rtde_r.disconnect()
+        self._rtde_c.disconnect()
 
     # While making things easier it can cause troubles.
     def __getattr__(self, name):
@@ -162,8 +169,8 @@ def _name_mangling(node_name, obj):
     return obj
 
 
-def _check_for_name_collision(nodes: Iterable[base.Node]):
-    unique_names = set(map(base.Node.name, nodes))
+def _check_for_name_collision(nodes: List[base.Node]):
+    unique_names = set(map(lambda n: n.name, nodes))
     assert len(unique_names) == len(nodes),\
         f"Name collision: {unique_names}"
 
@@ -197,6 +204,13 @@ def robot_interfaces_factory(
         variables: Optional[List[str]] = None
 ):
     """Interfaces to communicate with the robot."""
+    dashboard = DashboardClient(host)
+    dashboard.connect()
+    assert dashboard.isInRemoteControl(), "Not in remote control"
+    dashboard.loadURP("remote.urp")
+    dashboard.play()
+    assert dashboard.running()
+
     rtde_c = RTDEControlInterface(
         host,
         ur_cap_port=port,
@@ -209,9 +223,6 @@ def robot_interfaces_factory(
         variables=variables
     )
 
-    dashboard = DashboardClient(host)
-
-    dashboard.connect()
     assert rtde_r.isConnected()
     assert rtde_c.isConnected()
 

@@ -9,7 +9,7 @@ from rtde_control import RTDEControlInterface as RTDEControl
 
 from ur_env import base
 
-RTDEPose = RTDEAction = List[float]
+RTDEPose = List[float]
 
 
 class _ActionFn:
@@ -65,8 +65,6 @@ class ArmActionMode(base.Node):
         self._next_pose = None
 
     def step(self, action: base.Action):
-        action = action.tolist()
-        assert isinstance(action[0], (int, float)), f"Wrong action type: {action}"
         self._pre_action(action)
         self._act_fn(action)
         self._post_action()
@@ -75,17 +73,17 @@ class ArmActionMode(base.Node):
         return self._observation()
 
     @abc.abstractmethod
-    def _estimate_next_pose(self, action: RTDEAction) -> RTDEPose:
+    def _estimate_next_pose(self, action: base.Action) -> RTDEPose:
         """Next pose can be used to predict if safety limits
         would not be violated."""
 
-    def _pre_action(self, action: RTDEAction) -> bool:
+    def _pre_action(self, action: base.Action) -> bool:
         """Checks if an action can be done."""
         assert self._rtde_c.isConnected(), "Not connected."
         assert self._rtde_c.isProgramRunning(), "Program is not running."
         assert self._rtde_c.isSteady(), "Previous action is not finished."
-        # next_pose = self._estimate_next_pose(action)
-        # assert self._rtde_c.isPoseWithinSafetyLimits(next_pose)
+        next_pose = self._estimate_next_pose(action)
+        assert self._rtde_c.isPoseWithinSafetyLimits(next_pose)
         return 1
 
     def _post_action(self):
@@ -93,7 +91,7 @@ class ArmActionMode(base.Node):
         return 1
 
     @abc.abstractmethod
-    def _act_fn(self, action: RTDEAction) -> bool:
+    def _act_fn(self, action: base.Action) -> bool:
         """Function of RTDEControlInterface to call."""
 
     @property
@@ -102,10 +100,10 @@ class ArmActionMode(base.Node):
 
 
 class TCPPosition(ArmActionMode):
-    def _estimate_next_pose(self, action: RTDEAction) -> RTDEPose:
-        return action
+    def _estimate_next_pose(self, action):
+        return action.tolist()
     
-    def _act_fn(self, action: RTDEAction) -> bool:
+    def _act_fn(self, action: base.Action) -> bool:
         pose = self._rtde_r.getActualTCPPose()
         path = fracture_trajectory(pose, action)
 
@@ -113,8 +111,8 @@ class TCPPosition(ArmActionMode):
         # gitlab.com/sdurobotics/ur_rtde/-/issues/85
         success = 1
         for pose in path:
-            speed, acceleration = pose[-3:-1]
-            success *= _ActionFn.TCPPosition(self._rtde_c, pose[:-3], speed, acceleration)
+            speed, acceleration, blend = pose[-3:]
+            success *= self._rtde_c.moveL(pose[:-3], speed, acceleration)
         return success
 
     @property
@@ -130,7 +128,7 @@ class TCPPosition(ArmActionMode):
 def fracture_trajectory(
         begin: Union[List[float], np.ndarray],
         end: Union[List[float], np.ndarray],
-        waypoints: int = 10,
+        waypoints: int = 5,
         speed: Union[float, List[float]] = 0.25,
         acceleration: Union[float, List[float]] = 0.5,
         blend: Union[float, List[float]] = .0,
@@ -140,7 +138,7 @@ def fracture_trajectory(
     easier to find IK solution.
     """
     if waypoints == 1:
-        return end
+        return list(end) + [speed, acceleration, blend]
 
     def _transform_params(x):
         numeric = isinstance(x, (float, int))

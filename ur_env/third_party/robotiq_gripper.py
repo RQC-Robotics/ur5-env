@@ -260,7 +260,7 @@ class RobotiqGripper:
         clip_for = clip_val(self._min_force, force, self._max_force)
 
         # moves to the given position with the given speed and force
-        var_dict = OrderedDict[(self.POS, clip_pos), (self.SPE, clip_spe), (self.FOR, clip_for), (self.GTO, 1)]
+        var_dict = OrderedDict([(self.POS, clip_pos), (self.SPE, clip_spe), (self.FOR, clip_for), (self.GTO, 1)])
         return self._set_vars(var_dict), clip_pos
 
     def move_and_wait_for_pos(self, position: int, speed: int, force: int) -> Tuple[int, ObjectStatus]:  # noqa
