@@ -18,7 +18,8 @@ class GripperActionMode(base.Node, abc.ABC):
             host: str,
             port: Optional[int] = 63352,
             force: Optional[int] = 100,
-            speed: Optional[int] = 100
+            speed: Optional[int] = 100,
+            absolute_mode: bool = True
     ):
         """Pos, speed and force are constrained in [0, 255]."""
         gripper = RobotiqGripper()
@@ -31,6 +32,7 @@ class GripperActionMode(base.Node, abc.ABC):
         self._move = lambda pos: gripper.move_and_wait_for_pos(
             pos, rescale(speed), rescale(force)
         )
+        self._absolute = absolute_mode
         self._max_position = gripper.get_max_position()
         self._min_position = gripper.get_min_position()
         self._delta = float(self._max_position - self._min_position)
@@ -77,8 +79,10 @@ class Continuous(GripperActionMode):
     """Fine-grained control of a gripper."""
 
     def step(self, action: base.Action):
-        self._pos, self._obj_status = self._move(action)
+        pos = action if self._absolute else self._pos + action
+        self._pos, self._obj_status = self._move(pos)
 
     @property
     def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Box(low=0, high=255, shape=(), dtype=np.uint8)
+        low = 0 if self._absolute else -255
+        return gym.spaces.Box(low=low, high=255, shape=(), dtype=np.int8)

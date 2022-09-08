@@ -16,14 +16,17 @@ class RealSense(base.Node):
     """Intel RealSense D455."""
     name = "realsense"
 
-    def __init__(self, height: int = 480, width: int = 640):
+    def __init__(self,
+                 width: int = 848,
+                 height: int = 480,
+                 ):
         self._width = width
         self._height = height
         self._build()
 
     def get_observation(self) -> base.Observation:
         frames = [self.capture_frameset() for _ in range(4)]
-        rgb, depth, points = self.postprocess(frames)
+        rgb, depth, points = self._postprocess(frames)
         verts = np.asanyarray(points.get_vertices(2)) \
             .reshape(self._height, self._width, 3)
         return {
@@ -50,7 +53,7 @@ class RealSense(base.Node):
     def config(self):
         return self._config
 
-    def postprocess(self, frames: List[rs.frame]):
+    def _postprocess(self, frames: List[rs.frame]):
         """
         Process a sequence of frames.
         Temporal processing is only useful for static scene.
@@ -71,8 +74,12 @@ class RealSense(base.Node):
     def capture_frameset(self):
         """Obtains single frameset."""
         frameset = self._pipeline.wait_for_frames()
-        aligned = self._align.process(frameset)
-        return aligned
+        frameset = self._align.process(frameset)
+        depth = frameset.get_depth_frame()
+        self._decimation.process(depth)
+        self._hole_filling.process(depth)
+        # Counting on inplace operation
+        return frameset
 
     def _build(self):
         """
@@ -84,6 +91,8 @@ class RealSense(base.Node):
         self._align = rs.align(rs.stream.depth)
         self._pc = rs.pointcloud()
         self._temporal = rs.temporal_filter()
+        self._decimation = rs.decimation_filter()
+        self._hole_filling = rs.hole_filling_filter(2)
         # self._decimation = rs.decimation_filter()
 
         self._config.enable_stream(
@@ -92,6 +101,9 @@ class RealSense(base.Node):
             rs.stream.color, width=self._width, height=self._height)
 
         self._profile = self._pipeline.start(self._config)
+        # Set High Accuracy preset.
+        depth_sensor = self._profile.get_device().first_depth_sensor()
+        depth_sensor.set_option(rs.option.visual_preset, 3)
 
         # Wait for auto calibration.
         for _ in range(5):

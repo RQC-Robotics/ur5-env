@@ -1,4 +1,4 @@
-from typing import Optional, List, Mapping, Literal, Tuple
+from typing import Optional, List, Mapping, Literal, Tuple, Union
 import re
 import time
 import pathlib
@@ -16,6 +16,9 @@ from ur_env.cameras.realsense import RealSense
 from ur_env.robot.arm import ArmActionMode, TCPPosition
 from ur_env.robot.gripper import GripperActionMode, Continuous, Discrete
 
+# action mode class name + absolute_mode flag:
+CfgActionMode = Tuple[Union[ArmActionMode, GripperActionMode], bool]
+
 
 @dataclasses.dataclass(frozen=True)
 class SceneConfig:
@@ -28,16 +31,17 @@ class SceneConfig:
 
     # UR
     obs_schema: Optional[str] = None
-    arm_action_mode: Literal["TCPPosition"] = "TCPPosition"
+    arm_action_mode: CfgActionMode = ("TCPPosition", True)
+    arm_absolute_mode: bool = True
 
     # RealSense
-    width: int = 640
+    width: int = 848
     height: int = 480
 
     # Robotiq
     force: int = 100
     speed: int = 100
-    gripper_action_mode: Literal["Discrete", "Continuous"] = "Discrete"
+    gripper_action_mode: CfgActionMode = ("Discrete", True)
 
 
 _ACTION_MODES = dict(
@@ -121,13 +125,15 @@ class Scene:
             cfg.frequency,
             variables
         )
+        arm_action_mode, arm_absolute_mode = cfg.arm_action_mode
+        gripper_action_mode, gripper_absolute_mode = cfg.gripper_action_mode
         return cls(
             rtde_c,
             rtde_r,
             client,
-            _ACTION_MODES[cfg.arm_action_mode](rtde_c, rtde_r, schema),
-            _ACTION_MODES[cfg.gripper_action_mode](
-                cfg.host, cfg.gripper_port, cfg.force, cfg.speed),
+            _ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, arm_absolute_mode),
+            _ACTION_MODES[gripper_action_mode](
+                cfg.host, cfg.gripper_port, cfg.force, cfg.speed, gripper_absolute_mode),
             RealSense(width=cfg.width, height=cfg.height)
         )
 
@@ -136,7 +142,7 @@ class Scene:
         self._dashboard_client.stop()
         self._rtde_r.disconnect()
         self._rtde_c.disconnect()
-        self._dashboard_client.shutdown()
+        self._dashboard_client.disconnect()
         self.realsense.pipeline.stop()
 
     # While making things easier it can cause troubles.
@@ -229,7 +235,7 @@ def robot_interfaces_factory(
         dashboard.brakeRelease()
         time.sleep(10)
 
-    # Results in a timeout and there is no params to change such behaviour.
+    # Play results in a timeout and there is no params to change such behaviour.
     # dashboard.play()
 
     rtde_c = RTDEControlInterface(

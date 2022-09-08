@@ -9,8 +9,6 @@ from rtde_control import RTDEControlInterface as RTDEControl
 
 from ur_env import base
 
-RTDEPose = List[float]
-
 
 class ArmObservation:
     """Polls receiver multiple times to get all the observations specified in a scheme."""
@@ -50,12 +48,18 @@ class ArmActionMode(base.Node):
             self,
             rtde_c: RTDEControl,
             rtde_r: RTDEReceiveInterface,
-            schema: OrderedDict
+            schema: OrderedDict,
+            absolute_mode: bool = True
     ):
+        """
+        Schema specifies desirable observables: name, shape, dtype.
+        Absolute flag switches between absolute or relative coordinates chagne.
+        """
         self._rtde_c = rtde_c
         self._rtde_r = rtde_r
+        self._absolute = absolute_mode
         self._observation = ArmObservation(rtde_r, schema)
-        self._next_pose = None
+        self._update_state()
 
     def step(self, action: base.Action):
         self._pre_action(action)
@@ -66,7 +70,7 @@ class ArmActionMode(base.Node):
         return self._observation()
 
     @abc.abstractmethod
-    def _estimate_next_pose(self, action: base.Action) -> RTDEPose:
+    def _estimate_next_pose(self, action: base.Action) -> base.Action:
         """Next pose can be used to predict if safety limits
         would not be violated."""
 
@@ -75,13 +79,17 @@ class ArmActionMode(base.Node):
         assert self._rtde_c.isConnected(), "Not connected."
         assert self._rtde_c.isProgramRunning(), "Program is not running."
         assert self._rtde_c.isSteady(), "Previous action is not finished."
-        next_pose = self._estimate_next_pose(action)
-        assert self._rtde_c.isPoseWithinSafetyLimits(next_pose)
-        return 1
+        self._estim_next_tcp_pose = self._estimate_next_pose(action)
+        assert self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_next_tcp_pose)),\
+            "Safety settings violation may occur."
+        return True
 
-    def _post_action(self):
+    def _post_action(self) -> bool:
         """Checks if action results in a valid and safe pose."""
-        return 1
+        self._update_state()
+        assert np.allclose(self._estim_next_tcp_pose, self._tcp_pose, atol=1e-2),\
+            "Target and Actual pose discrepancy."
+        return True
 
     @abc.abstractmethod
     def _act_fn(self, action: base.Action) -> bool:
@@ -91,6 +99,13 @@ class ArmActionMode(base.Node):
     def observation_space(self) -> base.ObservationSpec:
         return self._observation.observation_space
 
+    def _update_state(self):
+        """
+        Action command or next pose estimation may require knowledge next of the current pose.
+        """
+        self._tcp_pose = np.asarray(self._rtde_r.getActualTCPPose())
+        self._joints_pos = np.asarray(self._rtde_r.getActualQ())
+
 
 class TCPPosition(ArmActionMode):
     """
@@ -98,11 +113,13 @@ class TCPPosition(ArmActionMode):
     action = (x,y,z,rx,ry,rz)
     """
     def _estimate_next_pose(self, action):
-        return action.tolist()
+        if self._absolute:
+            return action
+        return action + self._tcp_pose
     
     def _act_fn(self, action: base.Action) -> bool:
-        pose = self._rtde_r.getActualTCPPose()
-        path = fracture_trajectory(pose, action)
+        end_pose = action if self._absolute else self._tcp_pose + action
+        path = fracture_trajectory(self._tcp_pose, end_pose)
 
         # Use movePath when workaround for pybindings bug is found
         # gitlab.com/sdurobotics/ur_rtde/-/issues/85
@@ -131,8 +148,10 @@ def fracture_trajectory(
         blend: Union[float, List[float]] = .0,
 ):
     """
-    Splits trajectory to smaller pieces, so it is
-    easier to find IK solution.
+    Splits trajectory to equidistant (per dimension) intermediate waypoints.
+
+    Speed, accel. and blend are concatenated to waypoints, so
+    command signature for path differs from move to pose.
     """
     if waypoints == 1:
         return list(end) + [speed, acceleration, blend]

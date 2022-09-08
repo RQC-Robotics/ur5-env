@@ -46,8 +46,10 @@ class Node(abc.ABC):
 
 
 class Task(abc.ABC):
-    """RL task should probably implement the following methods."""
-    # Such they are in dm_control.
+    """
+    Defines relevant for RL task attributes.
+    """
+
     def __init__(self, random_state):
         if isinstance(random_state, int):
             self._np_random = np.random.RandomState(random_state)
@@ -76,6 +78,12 @@ class Task(abc.ABC):
         """Observation space."""
         return scene.observation_space
 
+    def before_step(self, action, scene):
+        """Pre action step."""
+
+    def after_step(self, scene):
+        """Post action step"""
+
 
 class Environment(abc.ABC):
     def __init__(self,
@@ -100,9 +108,9 @@ class Environment(abc.ABC):
     def step(self, action):
         """Perform action and update environment."""
 
-        # self._task.before_step(action, scene)
+        self._task.before_step(action, self._scene)
         self._scene.step(action)
-        # self._task.after_step(scene)
+        self._task.after_step(self._scene)
 
         self._step_count += 1
 
@@ -133,7 +141,7 @@ class Environment(abc.ABC):
         return self._task.action_space(self._scene)
 
     def close(self):
-        self._scene.shutdown()
+        self._scene.close()
 
     def _truncation(self):
         """

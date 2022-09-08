@@ -1,3 +1,4 @@
+"""Example task."""
 import gym.spaces
 
 from ur_env.base import Task
@@ -34,4 +35,3 @@ class StraightenUp(Task):
     def observation_space(self, scene):
         space = scene.observation_space
         return {k: v for k, v in space.items() if "gripper" not in k}
-
