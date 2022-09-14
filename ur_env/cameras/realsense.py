@@ -6,11 +6,6 @@ import pyrealsense2 as rs
 
 from ur_env import base
 
-# 1. There are many optional streams that can provide useful information
-#   check rs.stream for more info.
-
-# 2. Run calibration routine.
-
 
 class RealSense(base.Node):
     """Intel RealSense D455."""
@@ -28,7 +23,7 @@ class RealSense(base.Node):
         frames = [self.capture_frameset() for _ in range(4)]
         rgb, depth, points = self._postprocess(frames)
         verts = np.asanyarray(points.get_vertices(2)) \
-            .reshape(self._height, self._width, 3)
+            .reshape(self._depth_height, self._depth_width, 3)
         return {
             "depth": np.asanyarray(depth.get_data(), dtype=np.float32),
             "image": np.asanyarray(rgb.get_data(), dtype=np.uint8),
@@ -38,11 +33,12 @@ class RealSense(base.Node):
 
     @property
     def observation_space(self):
-        shape = (self._height, self._width)
+        rgb_shape = (self._height, self._width)
+        depth_shape = (self._depth_height, self._depth_width)
         return {
-            'depth': gym.spaces.Box(0, np.inf, shape=shape, dtype=np.float32),
-            'image': gym.spaces.Box(0, 255, shape=shape+(3,), dtype=np.uint8),
-            'point_cloud': gym.spaces.Box(0, np.inf, shape=shape+(3,), dtype=np.float32)
+            'depth': gym.spaces.Box(0, np.inf, shape=depth_shape, dtype=np.float32),
+            'image': gym.spaces.Box(0, 255, shape=rgb_shape+(3,), dtype=np.uint8),
+            'point_cloud': gym.spaces.Box(0, np.inf, shape=depth_shape+(3,), dtype=np.float32)
         }
 
     @property
@@ -60,13 +56,9 @@ class RealSense(base.Node):
         """
         depth_temporal = rs.temporal_filter()
         rgb_temporal = rs.temporal_filter()
-        for frame in frames:
-            depth_frame = depth_temporal.process(
-                frame.get_depth_frame()
-            )
-            rgb_frame = rgb_temporal.process(
-                frame.get_color_frame()
-            )
+        for depth, rgb in frames:
+            depth_frame = depth_temporal.process(depth)
+            rgb_frame = rgb_temporal.process(rgb)
         pcd = rs.pointcloud()
         points = pcd.calculate(depth_frame)
         return rgb_frame, depth_frame, points
@@ -76,10 +68,9 @@ class RealSense(base.Node):
         frameset = self._pipeline.wait_for_frames()
         frameset = self._align.process(frameset)
         depth = frameset.get_depth_frame()
-        self._decimation.process(depth)
-        self._hole_filling.process(depth)
-        # Counting on inplace operation
-        return frameset
+        depth = self._decimation.process(depth)
+        depth = self._hole_filling.process(depth)
+        return depth, frameset.get_color_frame()
 
     def _build(self):
         """
@@ -88,7 +79,7 @@ class RealSense(base.Node):
         """
         self._pipeline = rs.pipeline()
         self._config = rs.config()
-        self._align = rs.align(rs.stream.depth)
+        self._align = rs.align(rs.stream.color)
         self._pc = rs.pointcloud()
         self._temporal = rs.temporal_filter()
         self._decimation = rs.decimation_filter()
@@ -105,6 +96,7 @@ class RealSense(base.Node):
         depth_sensor = self._profile.get_device().first_depth_sensor()
         depth_sensor.set_option(rs.option.visual_preset, 3)
 
-        # Wait for auto calibration.
+        # Wait for auto calibration and update shapes after processing.
         for _ in range(5):
-            self._pipeline.wait_for_frames()
+            depth, rgb = self.capture_frameset()
+        self._depth_height, self._depth_width = np.asanyarray(depth.get_data()).shape

@@ -49,7 +49,7 @@ class ArmActionMode(base.Node):
             rtde_c: RTDEControl,
             rtde_r: RTDEReceiveInterface,
             schema: OrderedDict,
-            absolute_mode: bool = True
+            absolute_mode: bool = True,
     ):
         """
         Schema specifies desirable observables: name, shape, dtype.
@@ -81,13 +81,13 @@ class ArmActionMode(base.Node):
         assert self._rtde_c.isSteady(), "Previous action is not finished."
         self._estim_next_tcp_pose = self._estimate_next_pose(action)
         assert self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_next_tcp_pose)),\
-            "Safety settings violation may occur."
+            "Safety limits violation."
         return True
 
     def _post_action(self) -> bool:
         """Checks if action results in a valid and safe pose."""
         self._update_state()
-        assert np.allclose(self._estim_next_tcp_pose, self._tcp_pose, atol=1e-2),\
+        assert np.allclose(self._estim_next_tcp_pose, self._tcp_pose, atol=1e-1),\
             "Target and Actual pose discrepancy."
         return True
 
@@ -142,7 +142,7 @@ class TCPPosition(ArmActionMode):
 def fracture_trajectory(
         begin: Union[List[float], np.ndarray],
         end: Union[List[float], np.ndarray],
-        waypoints: int = 5,
+        waypoints: int = 1,
         speed: Union[float, List[float]] = 0.25,
         acceleration: Union[float, List[float]] = 0.5,
         blend: Union[float, List[float]] = .0,

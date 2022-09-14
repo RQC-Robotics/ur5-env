@@ -27,12 +27,11 @@ class SceneConfig:
     host: str = "10.201.2.179"
     arm_port: int = 50002
     gripper_port: int = 63352
-    frequency: float = -1.
+    frequency: float = 20
 
     # UR
     obs_schema: Optional[str] = None
     arm_action_mode: CfgActionMode = ("TCPPosition", True)
-    arm_absolute_mode: bool = True
 
     # RealSense
     width: int = 848
@@ -68,8 +67,6 @@ class Scene:
         self._rtde_c = rtde_c
         self._rtde_r = rtde_r
         self._dashboard_client = dashboard_client
-        # Nodes order does matter when acting.
-        #   ex.: move arm first then gripper.
         self._nodes = (
             arm_action_mode,
             gripper_action_mode,
@@ -78,7 +75,10 @@ class Scene:
         _check_for_name_collision(self.nodes)
 
     def step(self, action: Mapping[str, base.Action]):
-        """Scene can be updated partially if some nodes are not present in an action.keys()."""
+        """
+        Scene can be updated partially
+        if some nodes are not present in an action keys.
+        """
         for node in self._nodes:
             node_action = action.get(node.name)
             if node_action:
@@ -214,6 +214,21 @@ def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
     return schema, variables
 
 
+class NoOpDashboardClient(DashboardClient):
+    """
+    Disbales commands that don't work properly.
+    """
+    def loadURP(self, urp_name: str):
+        """Switching programs from running remote control
+        results in dedline error."""
+
+    def play(self):
+        """
+        Since only one program should be running at a time
+        RTDEControlInterface.reuploadScript should be used instead.
+        """
+
+
 def robot_interfaces_factory(
         host: str,
         port: Optional[int] = 50002,
@@ -225,7 +240,7 @@ def robot_interfaces_factory(
     Connection can't be established if there exists already opened one.
     Actually, it will result in an PolyScope error popup.
     """
-    dashboard = DashboardClient(host)
+    dashboard = NoOpDashboardClient(host)
     dashboard.connect()
     assert dashboard.isInRemoteControl(), "Not in remote control"
     dashboard.loadURP("remote.urp")
@@ -233,10 +248,11 @@ def robot_interfaces_factory(
     if "POWER_OFF" in dashboard.robotmode():
         dashboard.powerOn()
         dashboard.brakeRelease()
-        time.sleep(10)
+        print("Powering on")
+        time.sleep(12)
 
     # Play results in a timeout and there is no params to change such behaviour.
-    # dashboard.play()
+    dashboard.play()
 
     rtde_c = RTDEControlInterface(
         host,
