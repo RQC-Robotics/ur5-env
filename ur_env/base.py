@@ -146,11 +146,11 @@ class Environment:
         return self._task
 
     @property
-    def observation_space(self) -> NestedSpecs:
+    def observation_space(self):
         return self._task.observation_space(self._scene)
 
     @property
-    def action_space(self) -> NestedSpecs:
+    def action_space(self):
         return self._task.action_space(self._scene)
 
     def close(self):

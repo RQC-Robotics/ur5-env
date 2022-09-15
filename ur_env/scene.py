@@ -74,7 +74,7 @@ class Scene:
         )
         _check_for_name_collision(self.nodes)
 
-    def step(self, action: base.Action):
+    def step(self, action: base.NestedSpecs):
         """
         Scene can be updated partially
         if some nodes are not present in an action keys.
@@ -103,7 +103,7 @@ class Scene:
         return obs_specs
 
     @functools.cached_property
-    def action_space(self) -> base.ActionSpec:
+    def action_space(self) -> base.NestedSpecs:
         """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:

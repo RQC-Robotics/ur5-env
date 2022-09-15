@@ -23,14 +23,12 @@ class ReachTargetTask(base.Task):
 
     def action_space(self, scene):
         arm = scene.action_space["arm"]
-        return {
-            "arm": gym.spaces.Box(
+        return gym.spaces.Box(
                 low=arm.low[:3],
                 high=arm.high[:3],
                 shape=arm.shape,
                 dtype=arm.dtype
-            )
-        }
+        )
 
     def observation_space(self, scene):
         space = scene.observation_space
@@ -43,7 +41,7 @@ class ReachTarget(base.Environment):
     """
 
     def step(self, action):
-        action
+        action = {"arm": np.concatenate([action, base.DOWN_QUATERNION])}
         try:
             timestep = super().step(action)
         except base.SafetyLimitsViolation as e:
@@ -53,8 +51,8 @@ class ReachTarget(base.Environment):
                 done=True,
                 extra={'error': str(e)}
             )
-            # client = self._scene.dashboard_client
-            # client.closeSafetyPop
-        # todo: return robot to home position and close safety popup.
+            client = self._scene.dashboard_client
+            client.closeSafetyPopup()
+            client.unlockProtectiveStop()
 
         return timestep
