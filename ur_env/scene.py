@@ -1,4 +1,4 @@
-from typing import Optional, List, Mapping, Literal, Tuple, Union
+from typing import Optional, List, MutableMapping, Tuple, Union
 import re
 import time
 import pathlib
@@ -74,7 +74,7 @@ class Scene:
         )
         _check_for_name_collision(self.nodes)
 
-    def step(self, action: Mapping[str, base.Action]):
+    def step(self, action: base.Action):
         """
         Scene can be updated partially
         if some nodes are not present in an action keys.
@@ -84,7 +84,7 @@ class Scene:
             if node_action:
                 node.step(node_action)
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> base.NestedNDArray:
         """Gathers all observations."""
         observations = OrderedDict()
         for node in self._nodes:
@@ -94,7 +94,7 @@ class Scene:
         return observations
 
     @functools.cached_property
-    def observation_space(self) -> base.ObservationSpec:
+    def observation_space(self) -> base.NestedSpecs:
         """Gathers all observation specs."""
         obs_specs = OrderedDict()
         for node in self._nodes:
@@ -103,7 +103,7 @@ class Scene:
         return obs_specs
 
     @functools.cached_property
-    def action_space(self) -> Mapping[str, base.ActionSpec]:
+    def action_space(self) -> base.ActionSpec:
         """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
@@ -115,7 +115,7 @@ class Scene:
     def from_config(
             cls,
             cfg: SceneConfig
-    ):
+    ) -> "Scene":
         """Creates scene from config."""
         schema, variables = load_schema(cfg.obs_schema)
         
@@ -146,7 +146,7 @@ class Scene:
         self.realsense.pipeline.stop()
 
     # While making things easier it can cause troubles.
-    def __getattr__(self, name):
+    def __getattr__(self, name) -> base.Node:
         """Allows to obtain node by its name."""
         res = filter(lambda node: node.name == name, self._nodes)
         try:
@@ -155,28 +155,28 @@ class Scene:
             raise AttributeError(f"Node not found: {name}")
 
     @property
-    def rtde_control(self):
+    def rtde_control(self) -> RTDEControlInterface:
         return self._rtde_c
 
     @property
-    def rtde_receive(self):
+    def rtde_receive(self) -> RTDEReceiveInterface:
         return self._rtde_r
 
     @property
-    def nodes(self):
+    def nodes(self) -> Tuple[base.Node]:
         return self._nodes
 
     @property
-    def dashboard_client(self):
+    def dashboard_client(self) -> DashboardClient:
         return self._dashboard_client
 
 
 def _name_mangling(node_name, obj):
     """
-    To prevent key collision between different node.
+    To prevent key collision between different nodes.
     But it still can occur if there are two equal node names.
     """
-    if isinstance(obj, Mapping):
+    if isinstance(obj, MutableMapping):
         mangled = type(obj)()
         for key, value in obj.items():
             mangled[f"{node_name}/{key}"] = value
@@ -216,11 +216,11 @@ def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
 
 class NoOpDashboardClient(DashboardClient):
     """
-    Disbales commands that don't work properly.
+    Disables commands that don't work reliably.
     """
     def loadURP(self, urp_name: str):
         """Switching programs from running remote control
-        results in dedline error."""
+        results in deadline error."""
 
     def play(self):
         """
@@ -234,7 +234,7 @@ def robot_interfaces_factory(
         port: Optional[int] = 50002,
         frequency: Optional[float] = None,
         variables: Optional[List[str]] = None
-):
+) -> Tuple[RTDEControlInterface, RTDEReceiveInterface, DashboardClient]:
     """
     Interfaces to communicate with the robot.
     Connection can't be established if there exists already opened one.
@@ -251,7 +251,7 @@ def robot_interfaces_factory(
         print("Powering on")
         time.sleep(12)
 
-    # Play results in a timeout and there is no params to change such behaviour.
+    # Play results in a timeout and takes no params to change such behaviour.
     dashboard.play()
 
     rtde_c = RTDEControlInterface(

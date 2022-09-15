@@ -32,7 +32,7 @@ dashboard.powerOn()
 dashboard.brakeRelease()
 # dashboard.loadURP()
 
-#2. rtde_receive allows to obtain robot state.
+# 2. rtde_receive allows to obtain robot state.
 tcp_pose = rtde_r.getActualTCPPose()
 joints_pos = rtde_r.getActualQ()
 list(map(inspect, (tcp_pose, joints_pos)))

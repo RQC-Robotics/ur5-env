@@ -19,10 +19,10 @@ class RealSense(base.Node):
         self._height = height
         self._build()
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> base.NestedNDArray:
         frames = [self.capture_frameset() for _ in range(4)]
         rgb, depth, points = self._postprocess(frames)
-        verts = np.asanyarray(points.get_vertices(2)) \
+        verts = np.asanyarray(points.get_vertices()) \
             .reshape(self._depth_height, self._depth_width, 3)
         return {
             "depth": np.asanyarray(depth.get_data(), dtype=np.float32),
@@ -32,7 +32,7 @@ class RealSense(base.Node):
         }
 
     @property
-    def observation_space(self):
+    def observation_space(self) -> base.NestedSpecs:
         rgb_shape = (self._height, self._width)
         depth_shape = (self._depth_height, self._depth_width)
         return {
@@ -40,14 +40,6 @@ class RealSense(base.Node):
             'image': gym.spaces.Box(0, 255, shape=rgb_shape+(3,), dtype=np.uint8),
             'point_cloud': gym.spaces.Box(0, np.inf, shape=depth_shape+(3,), dtype=np.float32)
         }
-
-    @property
-    def pipeline(self):
-        return self._pipeline
-
-    @property
-    def config(self):
-        return self._config
 
     def _postprocess(self, frames: List[rs.frame]):
         """
@@ -84,7 +76,6 @@ class RealSense(base.Node):
         self._temporal = rs.temporal_filter()
         self._decimation = rs.decimation_filter()
         self._hole_filling = rs.hole_filling_filter(2)
-        # self._decimation = rs.decimation_filter()
 
         self._config.enable_stream(
             rs.stream.depth, width=self._width, height=self._height)
@@ -100,3 +91,15 @@ class RealSense(base.Node):
         for _ in range(5):
             depth, rgb = self.capture_frameset()
         self._depth_height, self._depth_width = np.asanyarray(depth.get_data()).shape
+
+    @property
+    def pipeline(self):
+        return self._pipeline
+
+    @property
+    def config(self):
+        return self._config
+
+    @property
+    def profile(self):
+        return self._profile

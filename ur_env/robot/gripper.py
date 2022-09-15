@@ -65,24 +65,24 @@ class GripperActionMode(base.Node, abc.ABC):
 class Discrete(GripperActionMode):
     """Opens or closes gripper."""
 
-    def step(self, action: base.Action):
+    def step(self, action: base.NDArray):
         self._pos, self._obj_status = self._move(
             self._max_position if action > 0.5 else self._min_position
         )
 
     @property
-    def action_space(self) -> base.ActionSpec:
+    def action_space(self) -> base.Specs:
         return gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
 
 
 class Continuous(GripperActionMode):
     """Fine-grained control of a gripper."""
 
-    def step(self, action: base.Action):
+    def step(self, action: base.NDArray):
         pos = action if self._absolute else self._pos + action
         self._pos, self._obj_status = self._move(pos)
 
     @property
-    def action_space(self) -> base.ActionSpec:
+    def action_space(self) -> base.Specs:
         low = 0 if self._absolute else -255
         return gym.spaces.Box(low=low, high=255, shape=(), dtype=np.int8)
