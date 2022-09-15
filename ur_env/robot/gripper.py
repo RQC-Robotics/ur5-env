@@ -48,9 +48,9 @@ class GripperActionMode(base.Node, abc.ABC):
         normed_pos = (self._pos - self._min_position) / self._delta
 
         return {
-            "is_closed": float(self._pos > self._min_position), #float(self._gripper.is_closed()),
-            "pose": normed_pos,
-            "object_detected": float(is_object_detected),
+            "is_closed": np.float32(self._pos > self._min_position), #float(self._gripper.is_closed()),
+            "pose": np.float32(normed_pos),
+            "object_detected": np.float32(is_object_detected),
         }
 
     @property

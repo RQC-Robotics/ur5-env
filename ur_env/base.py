@@ -12,8 +12,6 @@ Specs = gym.Space
 NestedSpecs = Mapping[str, Specs]
 NestedNDArray = Mapping[str, NDArray]
 
-DOWN_QUATERNION = np.array([0., 0.70710678118, 0.70710678118, 0.])
-
 
 class Node(abc.ABC):
     """
@@ -83,6 +81,14 @@ class Task(abc.ABC):
 
     def before_step(self, action, scene):
         """Pre action step."""
+        # Reconnection problem.
+        # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
+        rtde_r = scene.rtde_receive
+        rtde_c = scene.rtde_control
+        if not rtde_r.isConnected():
+            rtde_r.reconnect()
+        if not rtde_c.isConnected():
+            rtde_c.reconnect()
 
     def after_step(self, scene):
         """Post action step"""
@@ -99,7 +105,7 @@ class Environment:
     def __init__(self,
                  scene: "Scene",
                  task: Task,
-                 time_limit: float('inf')
+                 time_limit=float('inf')
                  ):
         self._scene = scene
         self._task = task

@@ -81,7 +81,7 @@ class Scene:
         """
         for node in self._nodes:
             node_action = action.get(node.name)
-            if node_action:
+            if node_action is not None:
                 node.step(node_action)
 
     def get_observation(self) -> base.NestedNDArray:
@@ -240,19 +240,16 @@ def robot_interfaces_factory(
     Connection can't be established if there exists already opened one.
     Actually, it will result in an PolyScope error popup.
     """
-    dashboard = NoOpDashboardClient(host)
+    #dashboard = NoOpDashboardClient(host)
+    dashboard = DashboardClient(host)
     dashboard.connect()
     assert dashboard.isInRemoteControl(), "Not in remote control"
-    dashboard.loadURP("remote.urp")
 
     if "POWER_OFF" in dashboard.robotmode():
         dashboard.powerOn()
         dashboard.brakeRelease()
         print("Powering on")
-        time.sleep(12)
-
-    # Play results in a timeout and takes no params to change such behaviour.
-    dashboard.play()
+        time.sleep(15)
 
     rtde_c = RTDEControlInterface(
         host,
