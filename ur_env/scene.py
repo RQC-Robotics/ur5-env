@@ -216,7 +216,8 @@ def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
 
 class NoOpDashboardClient(DashboardClient):
     """
-    Disables commands that don't work reliably.
+    Disables commands that don't work reliably or
+    shouldn't be used while env is running.
     """
     def loadURP(self, urp_name: str):
         """Switching programs from running remote control
@@ -240,8 +241,8 @@ def robot_interfaces_factory(
     Connection can't be established if there exists already opened one.
     Actually, it will result in an PolyScope error popup.
     """
-    #dashboard = NoOpDashboardClient(host)
-    dashboard = DashboardClient(host)
+    dashboard = NoOpDashboardClient(host)
+    #dashboard = DashboardClient(host)
     dashboard.connect()
     assert dashboard.isInRemoteControl(), "Not in remote control"
 

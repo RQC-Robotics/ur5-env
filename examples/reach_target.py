@@ -1,17 +1,29 @@
 import gym
 import numpy as np
+import numpy.typing as npt
 
 from ur_env import base
 
+DOWN_ROT = np.array([1.4, 2.8, 0.])
+
 
 class ReachTargetTask(base.Task):
-    def __init__(self, random_state, initial_pose, target_pose):
+    def __init__(self,
+                 random_state: np.random.RandomState,
+                 initial_pose: npt.ArrayLike,
+                 target_pose: npt.ArrayLike
+                 ):
+        assert len(initial_pose) == len(target_pose) == 3,\
+            f"Wrong xyz specification: {initial_pose, target_pose}"
         super().__init__(random_state)
-        self._initial_pose = np.float32(initial_pose)
+        self._initial_pose = np.concatenate(
+            [initial_pose, DOWN_ROT],
+            dtype=np.float32
+        )
         self._target_pos = np.float32(target_pose)
 
     def get_reward(self, scene):
-        pos = np.array(scene.rtde_receive.getActualTCPPose())
+        pos = np.float32(scene.rtde_receive.getActualTCPPose())
         return - np.linalg.norm(pos[:3] - self._target_pos)
 
     def get_termination(self, scene):
@@ -26,7 +38,7 @@ class ReachTargetTask(base.Task):
         return gym.spaces.Box(
                 low=arm.low[:3],
                 high=arm.high[:3],
-                shape=arm.shape,
+                shape=(3,),
                 dtype=arm.dtype
         )
 
@@ -41,7 +53,7 @@ class ReachTarget(base.Environment):
     """
 
     def step(self, action):
-        action = {"arm": np.concatenate([action, base.DOWN_QUATERNION])}
+        action = {"arm": np.concatenate([action, DOWN_ROT])}
         try:
             timestep = super().step(action)
         except base.SafetyLimitsViolation as e:
@@ -49,7 +61,7 @@ class ReachTarget(base.Environment):
                 observation=self._prev_obs,
                 reward=0.,
                 done=True,
-                extra={'error': str(e)}
+                extra={"error": str(e)}
             )
             client = self._scene.dashboard_client
             client.closeSafetyPopup()

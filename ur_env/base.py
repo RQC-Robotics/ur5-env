@@ -19,7 +19,7 @@ class Node(abc.ABC):
     By default node is uncontrollable.
     """
 
-    def step(self, action: NestedNDArray):
+    def step(self, action: NDArray):
         """
         Performs action and update state.
         NoOp by default.
@@ -30,7 +30,7 @@ class Node(abc.ABC):
         """Returns an observation from the node."""
 
     @property
-    def action_space(self) -> NestedSpecs:
+    def action_space(self) -> Union[Specs, NestedSpecs]:
         """gym-like action space mapping."""
         return None
 
@@ -55,27 +55,31 @@ class Task(abc.ABC):
         if isinstance(random_state, int):
             self._random_state = np.random.RandomState(random_state)
 
-    def get_observation(self, scene):
+    def get_observation(self, scene) -> NestedNDArray:
         """Returns observation from the environment."""
         return scene.get_observation()
 
     @abc.abstractmethod
-    def get_reward(self, scene):
+    def get_reward(self, scene) -> float:
         """Returns reward from the environment."""
 
     @abc.abstractmethod
-    def get_termination(self, scene):
+    def get_termination(self, scene) -> bool:
         """If the episode should end, returns a final discount, otherwise None."""
 
     @abc.abstractmethod
     def initialize_episode(self, scene):
         """Reset task and prepare for the new interactions."""
 
-    def action_space(self, scene):
+    def get_extra(self, scene) -> Dict[str, Any]:
+        """Optional information required to solve the task."""
+        return {}
+
+    def action_space(self, scene) -> NestedSpecs:
         """Action space."""
         return scene.action_space
 
-    def observation_space(self, scene):
+    def observation_space(self, scene) -> NestedSpecs:
         """Observation space."""
         return scene.observation_space
 
@@ -105,7 +109,7 @@ class Environment:
     def __init__(self,
                  scene: "Scene",
                  task: Task,
-                 time_limit=float('inf')
+                 time_limit: int = float("inf")
                  ):
         self._scene = scene
         self._task = task
@@ -131,15 +135,15 @@ class Environment:
 
         observation = self._task.get_observation(self._scene)
         reward = self._task.get_reward(self._scene)
+        extra = self._task.get_extra(self._scene)
         self._prev_obs = observation
 
         self._step_count += 1
         if self._time_limit <= self._step_count:
             done = True
-            extra = {"time_limit": True}
+            extra.update(time_limit=True)
         else:
             done = self._task.get_termination(self._scene)
-            extra = {}
 
         return Timestep(observation, reward, done, extra)
 

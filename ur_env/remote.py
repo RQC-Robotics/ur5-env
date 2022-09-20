@@ -32,13 +32,6 @@ def _assert_valid_size(data):
     return True
 
 
-def _set_socket(sock: socket.socket) -> socket.socket:
-    sock.settimeout(DEFAULT_TIMEOUT)
-    # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-    return sock
-
-
 class RemoteBase(abc.ABC):
     """Unsafe and inefficient data transmission via pickle."""
     def __init__(self, host: Optional[str] = None, port: Optional[int] = None):
@@ -62,14 +55,17 @@ class RemoteBase(abc.ABC):
 
 
 class RemoteEnvClient(RemoteBase):
+    """Client side of a remote robot env."""
 
     def connect(self, host: str, port: int):
         if self._sock:
             return
 
         try:
-            sock = socket.socket()
-            self._sock = _set_socket(sock)
+            self._sock = socket.socket()
+            self._sock.settimeout(DEFAULT_TIMEOUT)
+            # self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect((host, port))
             _log.info("Connected")
         except (socket.timeout, socket.error):
@@ -121,6 +117,8 @@ class RemoteEnvClient(RemoteBase):
 
 
 class RemoteEnvServer(RemoteBase):
+    """Server side hosting a robot."""
+
     def __init__(self, env: Environment, host: Optional[str] = None, port: Optional[int] = None):
         self._env = env
         super().__init__(host, port)
@@ -131,7 +129,6 @@ class RemoteEnvServer(RemoteBase):
 
         try:
             sock = socket.socket()
-            sock = _set_socket(sock)
             sock.bind((host, port))
             sock.listen(1)
             self._sock, add = sock.accept()
