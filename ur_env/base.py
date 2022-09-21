@@ -123,8 +123,9 @@ class Environment:
         self._step_count = 0
         self._task.initialize_episode(self._scene)
         obs = self._task.get_observation(self._scene)
+        extra = self._task.get_extra(self._scene)
         self._prev_obs = obs
-        return obs
+        return Timestep(observation=obs, reward=0, done=False, extra=extra)
 
     def step(self, action: NestedNDArray):
         """Perform action and update environment."""
