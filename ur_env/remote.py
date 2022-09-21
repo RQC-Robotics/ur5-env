@@ -6,11 +6,14 @@ import pickle
 import logging
 from collections import OrderedDict
 
+import numpy as np
+import gym.spaces
+
 from ur_env import base
 
 Address = Tuple[str, int]
 DEFAULT_TIMEOUT = 20.
-PKG_SIZE = 1 << 16
+PKG_SIZE = 1 << 20
 
 _log = logging.getLogger(__name__)
 
@@ -66,7 +69,11 @@ class RemoteBase(abc.ABC):
         dm-tree would come in handy here but for now only dicts are considered.
         """
         for key in keys:
-            self._send(data[key])
+            value = data[key]
+            # Prevent gym.spaces.Box from being sent
+            if isinstance(value, gym.spaces.Box):
+                value = HomogenousBox.from_gym_box(value)
+            self._send(value)
 
     def _recv_dict(self, keys: Sequence[str]) -> Dict[str, Any]:
         data = OrderedDict()
@@ -239,7 +246,8 @@ class RemoteEnvServer(RemoteBase):
             timestep = timestep_fn()
             self._send_dict(self.__obs_space_keys, timestep.observation)
             self._send(timestep._replace(observation=None))
-        except Exception as exp:  # env agnostic
+        except Exception as exp:
+            # So it is env agnostic and propagate the error.
             _log.error(exp)
             self._send(exp)
             raise
@@ -248,3 +256,45 @@ class RemoteEnvServer(RemoteBase):
         self._send(self._env.close())
         self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
+
+
+def _check_equal_limits(box: gym.spaces.Box):
+    low = box.low
+    high = box.high
+    return np.all(low[0] == low.max()) and np.all(high[0] == high.min())
+
+
+class HomogenousBox(gym.spaces.Box):
+    """
+    The main difference is that lower and upper bounds
+    are represented by one number instead of full array.
+    This implies limited usage of such an object.
+    """
+    _MSG = "Limits are not equal elementwise. Information will be lost."
+
+    def __getstate__(self):
+        assert _check_equal_limits(self), self._MSG
+        return self.low.max(), self.high.min(), self.shape, self.dtype
+
+    def __setstate__(self, state):
+        low, high, shape, dtype = state
+        lower_bound = np.full(shape, low, dtype)
+        upper_bound = np.full(shape, high, dtype)
+        self.__dict__.update(
+            dtype=dtype,
+            low=lower_bound,
+            high=upper_bound,
+            low_repr=str(low),
+            high_repr=str(high),
+            bounded_below=np.isfinite(lower_bound),
+            bounded_above=np.isfinite(upper_bound),
+            _shape=shape,
+            _np_random=None
+        )
+
+    @classmethod
+    def from_gym_box(cls, box: gym.spaces.Box):
+        assert isinstance(box, gym.spaces.Box), "Wrong type"
+        if not _check_equal_limits(box):
+            return box
+        return cls(box.low, box.high, box.shape, box.dtype)
