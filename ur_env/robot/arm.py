@@ -30,7 +30,7 @@ class ArmObservation:
     @property
     def observation_space(self):
         obs_space = OrderedDict()
-        _types = dict(int=np.int)
+        _types = dict(int=int)
         for key, spec_dict in self._schema.items():
             obs_space[key] = gym.spaces.Box(
                 low=-np.inf, high=np.inf,  # limits should also be obtained from the schema.
@@ -125,15 +125,6 @@ class TCPPosition(ArmActionMode):
     def _act_fn(self, action: base.NDArray) -> bool:
         end_pose = action if self._absolute else self._tcp_pose + action
         return self._rtde_c.moveL(list(end_pose))
-        # path = fracture_trajectory(self._tcp_pose, end_pose)
-        #
-        # # Use movePath when workaround for pybindings bug is found
-        # # gitlab.com/sdurobotics/ur_rtde/-/issues/85
-        # success = 1
-        # for pose in path:
-        #     speed, acceleration, _ = pose[-3:]
-        #     success *= self._rtde_c.moveL(pose[:-3], speed, acceleration)
-        # return success
 
     @property
     def action_space(self) -> base.Specs:

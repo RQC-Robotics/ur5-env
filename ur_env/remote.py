@@ -1,17 +1,18 @@
+"""Client-server connection with a robot."""
 from typing import Tuple, Optional, Any, Union, MutableMapping, List
+
 import abc
 import time
+import struct
 import socket
 import pickle
 import logging
-import math
 
 from ur_env import base
 
 Address = Tuple[str, int]
-DEFAULT_TIMEOUT = 20.
+DEFAULT_TIMEOUT = 10.
 PKG_SIZE = 1 << 16
-NUM_LEADING_ZEROS = 4
 
 _log = logging.getLogger(__name__)
 
@@ -23,15 +24,6 @@ class Command:
     STEP = 3
     CLOSE = 4
     PING = 5
-
-
-def chunking(data: bytes, chunk_size: int = PKG_SIZE) -> Tuple[int, List[bytes]]:
-    pkg_num = math.ceil(len(data) / chunk_size)
-    chunks = [
-        data[i * chunk_size:(i+1) * chunk_size]
-        for i in range(pkg_num)
-    ]
-    return pkg_num, chunks
 
 
 class RemoteBase(abc.ABC):
@@ -46,29 +38,25 @@ class RemoteBase(abc.ABC):
         """Establish connection."""
 
     def _send_cmd(self, cmd: Command) -> int:
-        bcmd = str(cmd).encode('utf-8')
-        return self._sock.send(bcmd)
+        cmd = struct.pack("h", cmd)
+        return self._sock.send(cmd)
 
     def _recv_cmd(self):
-        # unsafe fixed len, use struct
-        cmd = self._sock.recv(1)
-        return int(cmd)
+        cmd = self._sock.recv(2)
+        return struct.unpack("h", cmd)[0]
 
     def _recv(self) -> Any:
-        num_pkgs = self._sock.recv(NUM_LEADING_ZEROS)
-        num_pkgs = int(num_pkgs)
-        data = [self._sock.recv(PKG_SIZE) for _ in range(num_pkgs)]
-        data = b''.join(data)
+        size = self._sock.recv(4)
+        size = struct.unpack("I", size)[0]
+        data = bytearray()
+        while len(data) < size:
+            data.extend(self._sock.recv(PKG_SIZE))
         return pickle.loads(data)
 
     def _send(self, data: Any) -> int:
         data = pickle.dumps(data)
-        total_size = len(data)
-        num_pkgs, chunks = chunking(data)
-        self._sock.send(str(num_pkgs).zfill(NUM_LEADING_ZEROS).encode("utf-8"))
-        for chunk in chunks:
-            self._sock.send(chunk)
-        return total_size
+        data = struct.pack("I", len(data)) + data
+        return self._sock.send(data)
 
 
 class RemoteEnvClient(RemoteBase):
@@ -81,8 +69,8 @@ class RemoteEnvClient(RemoteBase):
         try:
             self._sock = socket.socket()
             self._sock.settimeout(DEFAULT_TIMEOUT)
-            # self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            # self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
             _log.info("Connected")
         except (socket.timeout, socket.error):
@@ -120,14 +108,6 @@ class RemoteEnvClient(RemoteBase):
     def observation_space(self):
         self._send_cmd(Command.OBS_SPACE)
         return self._recv()
-
-    @property
-    def scene(self):
-        raise NotImplementedError
-
-    @property
-    def task(self):
-        raise NotImplementedError
 
 
 class RemoteEnvServer(RemoteBase):

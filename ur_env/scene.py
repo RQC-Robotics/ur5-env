@@ -25,7 +25,7 @@ class SceneConfig:
     """Full scene configuration."""
     # RTDE
     host: str = "10.201.2.179"
-    arm_port: int = 50002
+    arm_port: int = 50003
     gripper_port: int = 63352
     frequency: float = 20
 
@@ -228,35 +228,42 @@ class NoOpDashboardClient(DashboardClient):
         Since only one program should be running at a time
         RTDEControlInterface.reuploadScript should be used instead.
         """
+        try:
+            super().play()
+        except RuntimeError as exp:
+            # Error always raised for whatever reason.
+            # Nonetheless, program restarts as if method is correct. 
+            pass
 
 
 def robot_interfaces_factory(
         host: str,
-        port: Optional[int] = 50002,
+        port: Optional[int] = 50003,
         frequency: Optional[float] = None,
         variables: Optional[List[str]] = None
 ) -> Tuple[RTDEControlInterface, RTDEReceiveInterface, DashboardClient]:
     """
     Interfaces to communicate with the robot.
     Connection can't be established if there exists already opened one.
-    Actually, it will result in an PolyScope error popup.
+    Actually, it will result in a PolyScope error popup.
     """
     dashboard = NoOpDashboardClient(host)
     #dashboard = DashboardClient(host)
     dashboard.connect()
-    assert dashboard.isInRemoteControl(), "Not in remote control"
+    assert dashboard.isInRemoteControl(), "Not in a remote control."
 
     if "POWER_OFF" in dashboard.robotmode():
         dashboard.powerOn()
         dashboard.brakeRelease()
-        print("Powering on")
-        time.sleep(15)
+        time.sleep(17)
 
+    flags = RTDEControlInterface.FLAG_USE_EXT_UR_CAP
+    flags |= RTDEControlInterface.FLAG_UPLOAD_SCRIPT
     rtde_c = RTDEControlInterface(
         host,
         ur_cap_port=port,
         frequency=frequency,
-        flags=RTDEControlInterface.FLAG_USE_EXT_UR_CAP
+        flags=flags
     )
     rtde_r = RTDEReceiveInterface(
         host,
