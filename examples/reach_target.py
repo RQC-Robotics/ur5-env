@@ -60,6 +60,10 @@ class ReachTarget(base.Environment):
     """
     Here follows example which resets on invalid action with no reward.
     """
+    def reset(self):
+        timestep = super().reset()
+        timestep.extra.update(workspace_limits=WORKSPACE_BOUNDARIES)
+        return timestep
 
     def step(self, action):
         low, high = WORKSPACE_BOUNDARIES
