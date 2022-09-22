@@ -170,3 +170,47 @@ class Environment:
 
 class SafetyLimitsViolation(Exception):
     """Raise if safety limits on UR5 are violated."""
+
+
+class HomogenousBox(gym.spaces.Box):
+    """
+    The main difference is that the lower and upper bounds
+    are represented by one number instead of a full array.
+    This implies limited usage of such an object,
+    but saves memory and hence eases pickling.
+    """
+
+    def __init__(self, low: float, high: float, shape=None, dtype=np.float32, seed=None):
+        super().__init__(low, high, shape, dtype, seed)
+
+    def __getstate__(self):
+        return self.low.item(0), self.high.item(0), self.shape, self.dtype, self._np_random
+
+    def __setstate__(self, state):
+        low, high, shape, dtype, random = state
+        lower_bound = np.full(shape, low, dtype)
+        upper_bound = np.full(shape, high, dtype)
+        self.__dict__.update(
+            dtype=dtype,
+            low=lower_bound,
+            high=upper_bound,
+            low_repr=str(low),
+            high_repr=str(high),
+            bounded_below=np.isfinite(lower_bound),
+            bounded_above=np.isfinite(upper_bound),
+            _shape=shape,
+            _np_random=random
+        )
+
+    @classmethod
+    def maybe_convert_box(cls, box):
+        """Tries to convert Box to HommBox if it is possible."""
+        if not isinstance(box, gym.spaces.Box) and not _check_equal_limits(box):
+            return box
+        return cls(box.low.item(0), box.high.item(0), box.shape, box.dtype, box.np_random)
+
+
+def _check_equal_limits(box: gym.spaces.Box):
+    low = box.low
+    high = box.high
+    return np.all(low.item(0) == low.max()) and np.all(high.item(0) == high.min())

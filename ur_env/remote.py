@@ -1,19 +1,17 @@
-from typing import Tuple, Optional, Sequence, Dict, Any, Mapping, Union
+from typing import Tuple, Optional, Any, Union, MutableMapping, List
 import abc
 import time
 import socket
 import pickle
 import logging
-from collections import OrderedDict
-
-import numpy as np
-import gym.spaces
+import math
 
 from ur_env import base
 
 Address = Tuple[str, int]
 DEFAULT_TIMEOUT = 20.
-PKG_SIZE = 1 << 20
+PKG_SIZE = 1 << 16
+NUM_LEADING_ZEROS = 4
 
 _log = logging.getLogger(__name__)
 
@@ -27,20 +25,19 @@ class Command:
     PING = 5
 
 
-def _assert_valid_size(data):
-    # should be replaced with chunking.
-    size = len(data)
-    if size >= PKG_SIZE:
-        msg = f"Package size is larger than maxsize: {size} / {PKG_SIZE}."
-        _log.error(msg)
-        raise ConnectionError(msg)
-    return True
+def chunking(data: bytes, chunk_size: int = PKG_SIZE) -> Tuple[int, List[bytes]]:
+    pkg_num = math.ceil(len(data) / chunk_size)
+    chunks = [
+        data[i * chunk_size:(i+1) * chunk_size]
+        for i in range(pkg_num)
+    ]
+    return pkg_num, chunks
 
 
 class RemoteBase(abc.ABC):
     """Unsafe and inefficient data transmission via pickle."""
     def __init__(self, address: Optional[Address]):
-        self._sock = None
+        self._sock: socket.socket = None
         if address:
             self.connect(address)
 
@@ -48,41 +45,30 @@ class RemoteBase(abc.ABC):
     def connect(self, address: Address):
         """Establish connection."""
 
-    @abc.abstractmethod
-    def _negotiate_protocol(self):
-        """Declare how nested objects will be transferred."""
+    def _send_cmd(self, cmd: Command) -> int:
+        bcmd = str(cmd).encode('utf-8')
+        return self._sock.send(bcmd)
 
-    def _receive(self) -> Any:
-        data = self._sock.recv(PKG_SIZE)
-        _assert_valid_size(data)
+    def _recv_cmd(self):
+        # unsafe fixed len, use struct
+        cmd = self._sock.recv(1)
+        return int(cmd)
+
+    def _recv(self) -> Any:
+        num_pkgs = self._sock.recv(NUM_LEADING_ZEROS)
+        num_pkgs = int(num_pkgs)
+        data = [self._sock.recv(PKG_SIZE) for _ in range(num_pkgs)]
+        data = b''.join(data)
         return pickle.loads(data)
 
-    def _send(self, data: Any):
+    def _send(self, data: Any) -> int:
         data = pickle.dumps(data)
-        _assert_valid_size(data)
-        return self._sock.sendall(data)
-
-    def _send_dict(self, keys: Sequence[str], data: Dict[str, Any]):
-        """
-        A nested structure as a whole can be larger than the PKG_SIZE,
-        so it will be sent item by item.
-        dm-tree would come in handy here but for now only dicts are considered.
-        """
-        for key in keys:
-            value = data[key]
-            # Prevent gym.spaces.Box from being sent
-            if isinstance(value, gym.spaces.Box):
-                value = HomogenousBox.from_gym_box(value)
-            self._send(value)
-
-    def _recv_dict(self, keys: Sequence[str]) -> Dict[str, Any]:
-        data = OrderedDict()
-        for key in keys:
-            value = self._receive()
-            if isinstance(value, Exception):
-                raise value
-            data[key] = value
-        return data
+        total_size = len(data)
+        num_pkgs, chunks = chunking(data)
+        self._sock.send(str(num_pkgs).zfill(NUM_LEADING_ZEROS).encode("utf-8"))
+        for chunk in chunks:
+            self._sock.send(chunk)
+        return total_size
 
 
 class RemoteEnvClient(RemoteBase):
@@ -98,59 +84,42 @@ class RemoteEnvClient(RemoteBase):
             # self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             # self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
-            self._negotiate_protocol()
             _log.info("Connected")
         except (socket.timeout, socket.error):
             self._sock = None
             raise
 
-    def _negotiate_protocol(self):
-        self.__act_space_keys, self.__obs_space_keys = self._receive()
-
     def ping(self):
         start = time.time()
-        self._send(Command.PING)
-        data = self._receive()
+        self._send_cmd(Command.PING)
+        data = self._recv()
         delta = 1e3 * (time.time() - start)
         msg = f"{data} {delta: .2f} ms."
         _log.info(msg)
         print(msg)
 
     def step(self, action: Union[base.NDArray, base.NestedNDArray]):
-        self._send(Command.STEP)
-        if self.__act_space_keys:
-            self._send_dict(self.__act_space_keys, action)
-        else:
-            self._send(action)
-        return self._recv_timestep()
+        self._send_cmd(Command.STEP)
+        self._send(action)
+        return self._recv()
 
     def reset(self):
-        self._send(Command.RESET)
-        return self._recv_timestep()
+        self._send_cmd(Command.RESET)
+        return self._recv()
 
     def close(self):
-        self._send(Command.CLOSE)
-        resp = self._receive()
-        self._sock.shutdown(socket.SHUT_RDWR)
+        self._send_cmd(Command.CLOSE)
         self._sock.close()
-        return resp
-    
-    def _recv_timestep(self):
-        obs = self._recv_dict(self.__obs_space_keys)
-        timestep = self._receive()
-        return timestep._replace(observation=obs)
 
     @property
     def action_space(self):
-        self._send(Command.ACT_SPACE)
-        if self.__act_space_keys:
-            return self._recv_dict(self.__act_space_keys)
-        return self._receive()
+        self._send_cmd(Command.ACT_SPACE)
+        return self._recv()
 
     @property
     def observation_space(self):
-        self._send(Command.OBS_SPACE)
-        return self._recv_dict(self.__obs_space_keys)
+        self._send_cmd(Command.OBS_SPACE)
+        return self._recv()
 
     @property
     def scene(self):
@@ -177,26 +146,16 @@ class RemoteEnvServer(RemoteBase):
             sock.bind(address)
             sock.listen()
             self._sock, add = sock.accept()
-            self._negotiate_protocol()
             _log.info(f"Connection established: {add}.")
         except (socket.timeout, socket.error):
             self._sock = None
             raise
 
-    def _negotiate_protocol(self):
-        act_space = self._env.action_space
-        if isinstance(act_space, Mapping):
-            self.__act_space_keys = tuple(act_space.keys())
-        else:
-            self.__act_space_keys = None
-        self.__obs_space_keys = tuple(self._env.observation_space.keys())
-        self._send((self.__act_space_keys, self.__obs_space_keys))
-
     def run(self):
         cmd = None
         try:
             while cmd != Command.CLOSE:
-                cmd = self._receive()
+                cmd = self._recv_cmd()
                 self._on_receive(cmd)
         except (EOFError, KeyboardInterrupt, ConnectionResetError) as e:
             _log.error("Connection interrupted.", exc_info=e)
@@ -204,97 +163,48 @@ class RemoteEnvServer(RemoteBase):
 
     def _on_receive(self, cmd: int):
         if cmd == Command.RESET:
-            self.reset()
+            data = self._env.reset()
         elif cmd == Command.STEP:
-            self.step()
+            data = self.step()
         elif cmd == Command.ACT_SPACE:
-            self.action_space()
+            data = self.action_space()
         elif cmd == Command.OBS_SPACE:
-            self.observation_space()
+            data = self.observation_space()
         elif cmd == Command.PING:
-            self._send("PING!")
+            data = "PING!"
         elif cmd == Command.CLOSE:
             self.close()
+            return
         else:
             msg = f"Unknown command: {cmd}"
             _log.error(msg)
             raise ValueError(msg)
 
+        return self._send(data)
+
     def step(self):
-        if self.__act_space_keys:
-            action = self._recv_dict(self.__act_space_keys)
-        else:
-            action = self._receive()
-        self._send_timestep(lambda: self._env.step(action))
+        action = self._recv()
+        return self._env.step(action)
 
     def action_space(self):
         act_space = self._env.action_space
-        if isinstance(act_space, Mapping):
-            self._send_dict(self.__act_space_keys, act_space)
-        else:
-            self._send(act_space)
+        return _convert_specs(act_space)
 
     def observation_space(self):
-        self._send_dict(self.__obs_space_keys, self._env.observation_space)
-
-    def reset(self):
-        self._send_timestep(lambda: self._env.reset())
-
-    def _send_timestep(self, timestep_fn):
-        # won't work if exception occur not in timestep_fn
-        try:
-            timestep = timestep_fn()
-            self._send_dict(self.__obs_space_keys, timestep.observation)
-            self._send(timestep._replace(observation=None))
-        except Exception as exp:
-            # So it is env agnostic and propagate the error.
-            _log.error(exp)
-            self._send(exp)
-            raise
+        obs_space = self._env.observation_space
+        return _convert_specs(obs_space)
 
     def close(self):
-        self._send(self._env.close())
+        self._env.close()
         self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
 
 
-def _check_equal_limits(box: gym.spaces.Box):
-    low = box.low
-    high = box.high
-    return np.all(low[0] == low.max()) and np.all(high[0] == high.min())
-
-
-class HomogenousBox(gym.spaces.Box):
-    """
-    The main difference is that lower and upper bounds
-    are represented by one number instead of full array.
-    This implies limited usage of such an object.
-    """
-    _MSG = "Limits are not equal elementwise. Information will be lost."
-
-    def __getstate__(self):
-        assert _check_equal_limits(self), self._MSG
-        return self.low.max(), self.high.min(), self.shape, self.dtype
-
-    def __setstate__(self, state):
-        low, high, shape, dtype = state
-        lower_bound = np.full(shape, low, dtype)
-        upper_bound = np.full(shape, high, dtype)
-        self.__dict__.update(
-            dtype=dtype,
-            low=lower_bound,
-            high=upper_bound,
-            low_repr=str(low),
-            high_repr=str(high),
-            bounded_below=np.isfinite(lower_bound),
-            bounded_above=np.isfinite(upper_bound),
-            _shape=shape,
-            _np_random=None
-        )
-
-    @classmethod
-    def from_gym_box(cls, box: gym.spaces.Box):
-        assert isinstance(box, gym.spaces.Box), "Wrong type"
-        if not _check_equal_limits(box):
-            return box
-        return cls(box.low, box.high, box.shape, box.dtype)
+def _convert_specs(specs):
+    """Compress gym.spaces.Box if possible."""
+    if isinstance(specs, MutableMapping):
+        for key, spec in specs.items():
+            specs[key] = base.HomogenousBox.maybe_convert_box(spec)
+    else:
+        specs = base.HomogenousBox.maybe_convert_box(specs)
+    return specs
