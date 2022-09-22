@@ -78,7 +78,7 @@ class ArmActionMode(base.Node):
         would not be violated."""
 
     def _pre_action(self, action: base.NDArray):
-        """Checks if an action can be done."""
+        """Checks if an action can be performed safely."""
         assert self._rtde_c.isConnected(), "Not connected."
         assert self._rtde_c.isProgramRunning(), "Program is not running."
         assert self._rtde_c.isSteady(), "Previous action is not finished."
@@ -88,7 +88,7 @@ class ArmActionMode(base.Node):
                 f"Safety limits violation: {self._estim_next_tcp_pose}")
 
     def _post_action(self):
-        """Checks if action results in a valid and safe pose."""
+        """Checks if a resulting pose is consistent with an estimated."""
         self._update_state()
         if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, atol=1e-2):
             raise base.SafetyLimitsViolation(
@@ -118,13 +118,11 @@ class TCPPosition(ArmActionMode):
     action = (x,y,z,rx,ry,rz)
     """
     def _estimate_next_pose(self, action):
-        if self._absolute:
-            return action
-        return action + self._tcp_pose
-    
+        return action if self._absolute else action + self._tcp_pose
+
     def _act_fn(self, action: base.NDArray) -> bool:
-        end_pose = action if self._absolute else self._tcp_pose + action
-        return self._rtde_c.moveL(list(end_pose))
+        pose = self._estimate_next_pose(action)
+        return self._rtde_c.moveL(list(pose))
 
     @property
     def action_space(self) -> base.Specs:
@@ -160,8 +158,7 @@ def fracture_trajectory(
 
         if numeric:
             return np.full(waypoints, param)
-        else:
-            return np.asarray(param)
+        return np.asarray(param)
 
     params = np.stack(
         list(map(_transform_params, (speed, acceleration, blend))),
