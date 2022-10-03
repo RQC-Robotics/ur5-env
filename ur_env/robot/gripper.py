@@ -8,7 +8,6 @@ from ur_env import base
 from ur_env.third_party.robotiq_gripper import RobotiqGripper
 
 
-# TODO: replace gripper control with non-blocking version via URCap.
 class GripperActionMode(base.Node, abc.ABC):
     """Robotiq gripper."""
     name = "gripper"

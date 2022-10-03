@@ -1,4 +1,4 @@
-from typing import Optional, List, MutableMapping, Tuple, Union
+from typing import Optional, List, NamedTuple, MutableMapping, Tuple, Dict, Any
 import re
 import time
 import pathlib
@@ -16,13 +16,16 @@ from ur_env.cameras.realsense import RealSense
 from ur_env.robot import ACTION_MODES
 from ur_env.robot import ArmActionMode, GripperActionMode
 
-# action mode class name + absolute_mode flag:
-CfgActionMode = Tuple[str, bool]
+# action mode class name + kwargs:
+CfgActionMode = Tuple[str, Dict[str, Any]]
 
 
-@dataclasses.dataclass(frozen=True)
-class SceneConfig:
-    """Full scene configuration."""
+class SceneConfig(NamedTuple):
+    """
+    Full scene configuration.
+    If action mode take more kwargs,
+    in that case them should be created by hand.
+    """
     # RTDE
     host: str = "10.201.2.179"
     arm_port: int = 50003
@@ -31,7 +34,7 @@ class SceneConfig:
 
     # UR
     obs_schema: Optional[str] = None
-    arm_action_mode: CfgActionMode = ("TCPPosition", True)
+    arm_action_mode: CfgActionMode = ("TCPPosition", dict(absolute_mode=True))
 
     # RealSense
     width: int = 848
@@ -40,7 +43,7 @@ class SceneConfig:
     # Robotiq
     force: int = 100
     speed: int = 100
-    gripper_action_mode: CfgActionMode = ("Discrete", True)
+    gripper_action_mode: CfgActionMode = ("Discrete", dict(absolute_mode=True))
 
 
 class Scene:
@@ -111,22 +114,22 @@ class Scene:
     ) -> "Scene":
         """Creates scene from config."""
         schema, variables = load_schema(cfg.obs_schema)
-        
+
         rtde_c, rtde_r, client = robot_interfaces_factory(
             cfg.host,
             cfg.arm_port,
             cfg.frequency,
             variables
         )
-        arm_action_mode, arm_absolute_mode = cfg.arm_action_mode
-        gripper_action_mode, gripper_absolute_mode = cfg.gripper_action_mode
+        arm_action_mode, arm_kwargs = cfg.arm_action_mode
+        gripper_action_mode, gripper_kwargs = cfg.gripper_action_mode
         return cls(
             rtde_c,
             rtde_r,
             client,
-            ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, arm_absolute_mode),
+            ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, **arm_kwargs),
             ACTION_MODES[gripper_action_mode](
-                cfg.host, cfg.gripper_port, cfg.force, cfg.speed, gripper_absolute_mode),
+                cfg.host, cfg.gripper_port, cfg.force, cfg.speed, **gripper_kwargs),
             RealSense(width=cfg.width, height=cfg.height)
         )
 

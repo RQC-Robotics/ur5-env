@@ -63,6 +63,7 @@ class ArmActionMode(base.Node):
         self._observation = ArmObservation(rtde_r, schema)
         self._update_state()
         self._kwargs = kwargs
+        self._estim_next_tcp_pose = None
 
     def step(self, action: base.NDArray):
         self._pre_action(action)

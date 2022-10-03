@@ -140,8 +140,8 @@ class RemoteEnvServer(RemoteBase):
             while cmd != Command.CLOSE:
                 cmd = self._recv_cmd()
                 self._on_receive(cmd)
-        except (EOFError, KeyboardInterrupt, ConnectionResetError) as e:
-            _log.error("Connection interrupted.", exc_info=e)
+        except (EOFError, KeyboardInterrupt, ConnectionResetError) as exp:
+            _log.error("Connection interrupted.", exc_info=exp)
             raise
 
     def _on_receive(self, cmd: int):
