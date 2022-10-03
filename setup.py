@@ -2,12 +2,9 @@ from setuptools import setup, find_packages
 
 
 setup(
-    name="ur_env",
+    name="ur-env",
     version="0.0.1",
-    packages=find_packages(
-        "ur_env",
-        include=["third_party"]
-    ),
+    packages=find_packages(),
+    package_data={"ur_env.robot": ["*.yaml"]},
     install_requires=open("requirements.txt").readlines(),
-    include_package_data=True
 )
