@@ -1,5 +1,5 @@
 """Client-server connection with a robot."""
-from typing import Tuple, Optional, Any, Union, MutableMapping, List
+from typing import Tuple, Optional, Any, Union, MutableMapping
 
 import abc
 import time
@@ -7,6 +7,9 @@ import struct
 import socket
 import pickle
 import logging
+
+import numpy as np
+import gym.spaces
 
 from ur_env import base
 
@@ -72,7 +75,7 @@ class RemoteEnvClient(RemoteBase):
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
-            _log.info("Connected")
+            _log.info(f"Connected to {address}")
         except (socket.timeout, socket.error):
             self._sock = None
             raise
@@ -86,7 +89,7 @@ class RemoteEnvClient(RemoteBase):
         _log.info(msg)
         print(msg)
 
-    def step(self, action: Union[base.NDArray, base.NestedNDArray]):
+    def step(self, action: Union[base.NDArray, base.NDArrayDict]):
         self._send_cmd(Command.STEP)
         self._send(action)
         return self._recv()
@@ -180,11 +183,55 @@ class RemoteEnvServer(RemoteBase):
         self._sock.close()
 
 
+class HomogenousBox(gym.spaces.Box):
+    """
+    The main difference is that the lower and upper bounds
+    are represented by one number instead of a full array.
+    This implies limited usage of such an object,
+    but saves memory and, hence, eases pickling.
+    """
+
+    def __init__(self, low: float, high: float, shape=None, dtype=np.float32, seed=None):
+        super().__init__(low, high, shape, dtype, seed)
+
+    def __getstate__(self):
+        return self.low.item(0), self.high.item(0), self.shape, self.dtype, self._np_random
+
+    def __setstate__(self, state):
+        low, high, shape, dtype, random = state
+        lower_bound = np.full(shape, low, dtype)
+        upper_bound = np.full(shape, high, dtype)
+        self.__dict__.update(
+            dtype=dtype,
+            low=lower_bound,
+            high=upper_bound,
+            low_repr=str(low),
+            high_repr=str(high),
+            bounded_below=np.isfinite(lower_bound),
+            bounded_above=np.isfinite(upper_bound),
+            _shape=shape,
+            _np_random=random
+        )
+
+    @classmethod
+    def maybe_convert_box(cls, box):
+        """Tries to convert Box to HommBox if it is possible."""
+        if not isinstance(box, gym.spaces.Box) and not _check_equal_limits(box):
+            return box
+        return cls(box.low.item(0), box.high.item(0), box.shape, box.dtype, box.np_random)
+
+
+def _check_equal_limits(box: gym.spaces.Box):
+    low = box.low
+    high = box.high
+    return np.all(low.item(0) == low) and np.all(high.item(0) == high)
+
+
 def _convert_specs(specs):
     """Compress gym.spaces.Box if possible."""
     if isinstance(specs, MutableMapping):
         for key, spec in specs.items():
-            specs[key] = base.HomogenousBox.maybe_convert_box(spec)
+            specs[key] = HomogenousBox.maybe_convert_box(spec)
     else:
-        specs = base.HomogenousBox.maybe_convert_box(specs)
+        specs = HomogenousBox.maybe_convert_box(specs)
     return specs

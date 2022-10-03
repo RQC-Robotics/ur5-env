@@ -13,11 +13,11 @@ from dashboard_client import DashboardClient
 
 from ur_env import base
 from ur_env.cameras.realsense import RealSense
-from ur_env.robot.arm import ArmActionMode, TCPPosition
-from ur_env.robot.gripper import GripperActionMode, Continuous, Discrete
+from ur_env.robot import ACTION_MODES
+from ur_env.robot import ArmActionMode, GripperActionMode
 
 # action mode class name + absolute_mode flag:
-CfgActionMode = Tuple[Union[ArmActionMode, GripperActionMode], bool]
+CfgActionMode = Tuple[str, bool]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -41,13 +41,6 @@ class SceneConfig:
     force: int = 100
     speed: int = 100
     gripper_action_mode: CfgActionMode = ("Discrete", True)
-
-
-_ACTION_MODES = dict(
-    TCPPosition=TCPPosition,
-    Discrete=Discrete,
-    Continuous=Continuous
-)
 
 
 class Scene:
@@ -74,7 +67,7 @@ class Scene:
         )
         _check_for_name_collision(self.nodes)
 
-    def step(self, action: base.NestedSpecs):
+    def step(self, action: base.SpecsDict):
         """
         Scene can be updated partially
         if some nodes are not present in an action keys.
@@ -84,7 +77,7 @@ class Scene:
             if node_action is not None:
                 node.step(node_action)
 
-    def get_observation(self) -> base.NestedNDArray:
+    def get_observation(self) -> base.NDArrayDict:
         """Gathers all observations."""
         observations = OrderedDict()
         for node in self._nodes:
@@ -94,7 +87,7 @@ class Scene:
         return observations
 
     @functools.cached_property
-    def observation_space(self) -> base.NestedSpecs:
+    def observation_space(self) -> base.SpecsDict:
         """Gathers all observation specs."""
         obs_specs = OrderedDict()
         for node in self._nodes:
@@ -103,7 +96,7 @@ class Scene:
         return obs_specs
 
     @functools.cached_property
-    def action_space(self) -> base.NestedSpecs:
+    def action_space(self) -> base.SpecsDict:
         """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
@@ -131,8 +124,8 @@ class Scene:
             rtde_c,
             rtde_r,
             client,
-            _ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, arm_absolute_mode),
-            _ACTION_MODES[gripper_action_mode](
+            ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, arm_absolute_mode),
+            ACTION_MODES[gripper_action_mode](
                 cfg.host, cfg.gripper_port, cfg.force, cfg.speed, gripper_absolute_mode),
             RealSense(width=cfg.width, height=cfg.height)
         )
@@ -230,9 +223,9 @@ class NoOpDashboardClient(DashboardClient):
         """
         try:
             super().play()
-        except RuntimeError as exp:
+        except RuntimeError:
             # Error always raised for whatever reason.
-            # Nonetheless, program restarts as if method is correct. 
+            # Nonetheless, program restarts as if the method was correct.
             pass
 
 

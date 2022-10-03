@@ -19,7 +19,7 @@ class RealSense(base.Node):
         self._height = height
         self._build()
 
-    def get_observation(self) -> base.NestedNDArray:
+    def get_observation(self) -> base.NDArrayDict:
         frames = [self.capture_frameset() for _ in range(4)]
         rgb, depth, points = self._postprocess(frames)
         verts = np.asanyarray(points.get_vertices()).view(np.float32) \
@@ -32,7 +32,7 @@ class RealSense(base.Node):
         }
 
     @property
-    def observation_space(self) -> base.NestedSpecs:
+    def observation_space(self) -> base.SpecsDict:
         rgb_shape = (self._height, self._width)
         depth_shape = (self._depth_height, self._depth_width)
         return {

@@ -69,7 +69,7 @@ class ArmActionMode(base.Node):
         self._act_fn(action)
         self._post_action()
 
-    def get_observation(self) -> base.NestedNDArray:
+    def get_observation(self) -> base.NDArrayDict:
         return self._observation()
 
     @abc.abstractmethod
@@ -101,7 +101,7 @@ class ArmActionMode(base.Node):
         """Function of RTDEControlInterface to call."""
 
     @property
-    def observation_space(self) -> base.NestedSpecs:
+    def observation_space(self) -> base.SpecsDict:
         return self._observation.observation_space
 
     def _update_state(self):

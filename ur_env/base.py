@@ -1,6 +1,6 @@
 """Definition of used classes."""
 import abc
-from typing import NamedTuple, Dict, Any, Mapping, Union
+from typing import NamedTuple, Dict, Any, MutableMapping, Union
 
 import gym.spaces
 import numpy as np
@@ -9,8 +9,8 @@ import numpy.typing as npt
 
 NDArray = npt.NDArray
 Specs = gym.Space
-NestedSpecs = Mapping[str, Specs]
-NestedNDArray = Mapping[str, NDArray]
+SpecsDict = MutableMapping[str, Specs]
+NDArrayDict = MutableMapping[str, NDArray]
 
 
 class Node(abc.ABC):
@@ -22,21 +22,21 @@ class Node(abc.ABC):
     def step(self, action: NDArray):
         """
         Performs action and update state.
-        NoOp by default.
+        No-op by default.
         """
 
     @abc.abstractmethod
-    def get_observation(self) -> NestedNDArray:
+    def get_observation(self) -> NDArrayDict:
         """Returns an observation from the node."""
 
     @property
-    def action_space(self) -> Union[Specs, NestedSpecs]:
+    def action_space(self) -> Union[Specs, SpecsDict, None]:
         """gym-like action space mapping."""
         return None
 
     @property
     @abc.abstractmethod
-    def observation_space(self) -> NestedSpecs:
+    def observation_space(self) -> SpecsDict:
         """gym-like observation space mapping."""
 
     @property
@@ -55,7 +55,7 @@ class Task(abc.ABC):
         if isinstance(random_state, int):
             self._random_state = np.random.RandomState(random_state)
 
-    def get_observation(self, scene) -> NestedNDArray:
+    def get_observation(self, scene) -> NDArrayDict:
         """Returns observation from the environment."""
         return scene.get_observation()
 
@@ -75,11 +75,11 @@ class Task(abc.ABC):
         """Optional information required to solve the task."""
         return {}
 
-    def action_space(self, scene) -> NestedSpecs:
+    def action_space(self, scene) -> SpecsDict:
         """Action space."""
         return scene.action_space
 
-    def observation_space(self, scene) -> NestedSpecs:
+    def observation_space(self, scene) -> SpecsDict:
         """Observation space."""
         return scene.observation_space
 
@@ -99,7 +99,7 @@ class Task(abc.ABC):
 
 
 class Timestep(NamedTuple):
-    observation: NestedNDArray
+    observation: NDArrayDict
     reward: float
     done: bool
     extra: Dict[str, Any]
@@ -127,7 +127,7 @@ class Environment:
         self._prev_obs = obs
         return Timestep(observation=obs, reward=0, done=False, extra=extra)
 
-    def step(self, action: NestedNDArray):
+    def step(self, action: NDArrayDict):
         """Perform action and update environment."""
 
         self._task.before_step(action, self._scene)
@@ -170,47 +170,3 @@ class Environment:
 
 class SafetyLimitsViolation(Exception):
     """Raise if safety limits on UR5 are violated."""
-
-
-class HomogenousBox(gym.spaces.Box):
-    """
-    The main difference is that the lower and upper bounds
-    are represented by one number instead of a full array.
-    This implies limited usage of such an object,
-    but saves memory and hence eases pickling.
-    """
-
-    def __init__(self, low: float, high: float, shape=None, dtype=np.float32, seed=None):
-        super().__init__(low, high, shape, dtype, seed)
-
-    def __getstate__(self):
-        return self.low.item(0), self.high.item(0), self.shape, self.dtype, self._np_random
-
-    def __setstate__(self, state):
-        low, high, shape, dtype, random = state
-        lower_bound = np.full(shape, low, dtype)
-        upper_bound = np.full(shape, high, dtype)
-        self.__dict__.update(
-            dtype=dtype,
-            low=lower_bound,
-            high=upper_bound,
-            low_repr=str(low),
-            high_repr=str(high),
-            bounded_below=np.isfinite(lower_bound),
-            bounded_above=np.isfinite(upper_bound),
-            _shape=shape,
-            _np_random=random
-        )
-
-    @classmethod
-    def maybe_convert_box(cls, box):
-        """Tries to convert Box to HommBox if it is possible."""
-        if not isinstance(box, gym.spaces.Box) and not _check_equal_limits(box):
-            return box
-        return cls(box.low.item(0), box.high.item(0), box.shape, box.dtype, box.np_random)
-
-
-def _check_equal_limits(box: gym.spaces.Box):
-    low = box.low
-    high = box.high
-    return np.all(low.item(0) == low.max()) and np.all(high.item(0) == high.min())
