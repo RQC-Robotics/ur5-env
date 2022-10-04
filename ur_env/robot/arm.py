@@ -123,7 +123,7 @@ class TCPPosition(ArmActionMode):
 
     def _act_fn(self, action: base.NDArray) -> bool:
         pose = self._estimate_next_pose(action)
-        return self._rtde_c.moveL(list(pose))
+        return self._rtde_c.moveL(list(pose), speed=.1, acceleration=.5)
 
     @property
     def action_space(self) -> base.Specs:

@@ -110,6 +110,9 @@ class Task(abc.ABC):
         if not rtde_c.isConnected():
             rtde_c.reconnect()
 
+        while not rtde_c.isSteady():
+            pass
+
         return action
 
     def after_step(self, scene, exp: Optional[Exception] = None) -> float:
@@ -118,7 +121,7 @@ class Task(abc.ABC):
         Here it is possible to handle error.
         """
         if isinstance(exp, SafetyLimitsViolation) and self._auto_unlock:
-            time.sleep(5)  # Unlock can only happen after 5 sec. delay
+            time.sleep(6)  # Unlock can only happen after 5 sec. delay
             client = scene.dashboard_client
             client.closeSafetyPopup()
             client.unlockProtectiveStop()
