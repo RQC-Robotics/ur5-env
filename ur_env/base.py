@@ -1,6 +1,7 @@
 """Definition of used classes."""
 import abc
 from typing import NamedTuple, Dict, Any, MutableMapping, Union, Optional
+import time
 
 import gym.spaces
 import numpy as np
@@ -65,9 +66,10 @@ class Task(abc.ABC):
     Defines relevant for RL task methods.
     """
 
-    def __init__(self, random_state: Union[int, np.random.RandomState]):
+    def __init__(self, random_state: Union[int, np.random.RandomState], auto_unlock: bool = False):
         if isinstance(random_state, int):
             self._random_state = np.random.RandomState(random_state)
+        self._auto_unlock = auto_unlock
 
     def get_observation(self, scene) -> NDArrayDict:
         """Returns observation from the environment."""
@@ -115,12 +117,11 @@ class Task(abc.ABC):
         Post action step.
         Here it is possible to handle error.
         """
-        # TODO: However, it is unsafe to use unlockProtectiveStop
-        #   w/o human supervision.
-        if isinstance(exp, SafetyLimitsViolation):
+        if isinstance(exp, SafetyLimitsViolation) and self._auto_unlock:
             client = scene.dashboard_client
             client.closeSafetyPopup()
             client.unlockProtectiveStop()
+            time.sleep(5)  # After unlock, next command must be delayed by 5 sec.
         return 0
 
 
@@ -140,6 +141,7 @@ class Environment:
         """Reset episode"""
 
         self._step_count = 0
+        # Catch errors on init.
         extra = self._task.initialize_episode(self._scene)
         obs = self._task.get_observation(self._scene)
         extra.update(self._task.get_extra(self._scene))
