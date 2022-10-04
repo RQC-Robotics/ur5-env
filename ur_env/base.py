@@ -66,9 +66,9 @@ class Task(abc.ABC):
     Defines relevant for RL task methods.
     """
 
-    def __init__(self, random_state: Union[int, np.random.RandomState], auto_unlock: bool = False):
-        if isinstance(random_state, int):
-            self._random_state = np.random.RandomState(random_state)
+    def __init__(self, rng: Union[int, np.random.Generator], auto_unlock: bool = False):
+        if isinstance(rng, int):
+            self._rng = np.random.Generator(rng)
         self._auto_unlock = auto_unlock
 
     def get_observation(self, scene) -> NDArrayDict:
