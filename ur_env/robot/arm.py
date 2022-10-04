@@ -42,7 +42,7 @@ class ArmObservation:
 
 class ArmActionMode(base.Node):
     """UR5e arm."""
-    __name = "arm"
+    _name = "arm"
 
     def __init__(
             self,

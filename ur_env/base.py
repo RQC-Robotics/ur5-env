@@ -21,7 +21,7 @@ class Node(abc.ABC):
     Describes how device should act and update state.
     By default node is uncontrollable.
     """
-    __name = None
+    _name = None
 
     def step(self, action: NDArray):
         """
@@ -47,7 +47,7 @@ class Node(abc.ABC):
     def name(self) -> str:
         """Node identifier. Used as an action key
         and for accessing attributes in a scene."""
-        return self.__name
+        return self._name
 
 
 class Timestep(NamedTuple):
