@@ -11,8 +11,6 @@ import logging
 import numpy as np
 import gym.spaces
 
-from ur_env import base
-
 Address = Tuple[str, int]
 DEFAULT_TIMEOUT = 10.
 PKG_SIZE = 1 << 16
@@ -89,7 +87,7 @@ class RemoteEnvClient(RemoteBase):
         _log.info(msg)
         print(msg)
 
-    def step(self, action: Union[base.NDArray, base.NDArrayDict]):
+    def step(self, action):
         self._send_cmd(Command.STEP)
         self._send(action)
         return self._recv()
@@ -116,7 +114,7 @@ class RemoteEnvClient(RemoteBase):
 class RemoteEnvServer(RemoteBase):
     """Server side hosting a robot."""
 
-    def __init__(self, env: base.Environment, address: Address):
+    def __init__(self, env, address: Address):
         self._env = env
         super().__init__(address)
 
