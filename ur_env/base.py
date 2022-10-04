@@ -1,6 +1,6 @@
 """Definition of used classes."""
 import abc
-from typing import NamedTuple, Dict, Any, MutableMapping, Union
+from typing import NamedTuple, Dict, Any, MutableMapping, Union, Optional
 
 import gym.spaces
 import numpy as np
@@ -11,6 +11,8 @@ NDArray = npt.NDArray
 Specs = gym.Space
 SpecsDict = MutableMapping[str, Specs]
 NDArrayDict = MutableMapping[str, NDArray]
+
+Extra = Dict[str, Any]
 
 
 class Node(abc.ABC):
@@ -47,6 +49,17 @@ class Node(abc.ABC):
         return self.__name
 
 
+class Timestep(NamedTuple):
+    """"
+    Default transition tuple emitted after interaction with an env.
+    Extra may hold additional info required for solving task.
+    """
+    observation: NDArrayDict
+    reward: float
+    done: bool
+    extra: Extra
+
+
 class Task(abc.ABC):
     """
     Defines relevant for RL task methods.
@@ -69,10 +82,10 @@ class Task(abc.ABC):
         """If the episode should end, returns a final discount, otherwise None."""
 
     @abc.abstractmethod
-    def initialize_episode(self, scene):
-        """Reset task and prepare for the new interactions."""
+    def initialize_episode(self, scene) -> Extra:
+        """Reset task and prepare for new interactions."""
 
-    def get_extra(self, scene) -> Dict[str, Any]:
+    def get_extra(self, scene) -> Extra:
         """Optional information required to solve the task."""
         return {}
 
@@ -84,7 +97,7 @@ class Task(abc.ABC):
         """Observation space."""
         return scene.observation_space
 
-    def before_step(self, action, scene):
+    def before_step(self, action: Any, scene) -> NDArrayDict:
         """Pre action step."""
         # Reconnection problem.
         # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
@@ -95,15 +108,20 @@ class Task(abc.ABC):
         if not rtde_c.isConnected():
             rtde_c.reconnect()
 
-    def after_step(self, scene):
-        """Post action step"""
+        return action
 
-
-class Timestep(NamedTuple):
-    observation: NDArrayDict
-    reward: float
-    done: bool
-    extra: Dict[str, Any]
+    def after_step(self, scene, exp: Optional[Exception] = None) -> float:
+        """
+        Post action step.
+        Here it is possible to handle error.
+        """
+        # TODO: However, it is unsafe to use unlockProtectiveStop
+        #   w/o human supervision.
+        if isinstance(exp, SafetyLimitsViolation):
+            client = scene.dashboard_client
+            client.closeSafetyPopup()
+            client.unlockProtectiveStop()
+        return 0
 
 
 class Environment:
@@ -118,34 +136,40 @@ class Environment:
         self._step_count = 0
         self._prev_obs = None
 
-    def reset(self):
+    def reset(self) -> Timestep:
         """Reset episode"""
 
         self._step_count = 0
-        self._task.initialize_episode(self._scene)
+        extra = self._task.initialize_episode(self._scene)
         obs = self._task.get_observation(self._scene)
-        extra = self._task.get_extra(self._scene)
+        extra.update(self._task.get_extra(self._scene))
         self._prev_obs = obs
         return Timestep(observation=obs, reward=0, done=False, extra=extra)
 
-    def step(self, action: NDArrayDict):
+    def step(self, action:  Any) -> Timestep:
         """Perform action and update environment."""
-
-        self._task.before_step(action, self._scene)
-        self._scene.step(action)
-        self._task.after_step(self._scene)
-
-        observation = self._task.get_observation(self._scene)
-        reward = self._task.get_reward(self._scene)
-        extra = self._task.get_extra(self._scene)
-        self._prev_obs = observation
-
-        self._step_count += 1
-        if self._time_limit <= self._step_count:
+        action: NDArrayDict = self._task.before_step(action, self._scene)
+        try:
+            self._scene.step(action)
+        except SafetyLimitsViolation as exp:
+            reward = self._task.after_step(self._scene, exp)
+            observation = self._prev_obs
             done = True
-            extra.update(time_limit=True)
+            extra = {"exception": str(exp)}
         else:
-            done = self._task.get_termination(self._scene)
+            self._task.after_step(self._scene)
+            observation = self._task.get_observation(self._scene)
+            reward = self._task.get_reward(self._scene)
+            extra = self._task.get_extra(self._scene)
+
+            self._prev_obs = observation
+            self._step_count += 1
+
+            if self._time_limit <= self._step_count:
+                done = True
+                extra.update(time_limit=True)
+            else:
+                done = self._task.get_termination(self._scene)
 
         return Timestep(observation, reward, done, extra)
 
@@ -170,4 +194,4 @@ class Environment:
 
 
 class SafetyLimitsViolation(Exception):
-    """Raise if safety limits on UR5 are violated."""
+    """Raise if UR safety limits are violated."""

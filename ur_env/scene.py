@@ -3,7 +3,6 @@ import re
 import time
 import pathlib
 import functools
-import dataclasses
 from collections import OrderedDict
 
 from ruamel.yaml import YAML
@@ -112,7 +111,7 @@ class Scene:
             cls,
             cfg: SceneConfig
     ) -> "Scene":
-        """Creates scene from config."""
+        """Creates scene from the config."""
         schema, variables = load_schema(cfg.obs_schema)
 
         rtde_c, rtde_r, client = robot_interfaces_factory(
@@ -143,12 +142,9 @@ class Scene:
 
     # While making things easier it can cause troubles.
     def __getattr__(self, name) -> base.Node:
-        """Allows to obtain node by its name."""
-        res = filter(lambda node: node.name == name, self._nodes)
-        try:
-            return next(res)
-        except StopIteration:
-            raise AttributeError(f"Node not found: {name}")
+        """Allows to obtain node by its name assuming node name is unique."""
+        node = filter(lambda n: n.name == name, self._nodes)
+        return next(node)
 
     @property
     def rtde_control(self) -> RTDEControlInterface:
