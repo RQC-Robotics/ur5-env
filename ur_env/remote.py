@@ -127,7 +127,7 @@ class RemoteEnvServer(RemoteBase):
         try:
             sock = socket.socket()
             sock.bind(address)
-            sock.listen()
+            sock.listen(1)
             self._sock, add = sock.accept()
             _log.info(f"Connection established: {add}.")
         except (socket.timeout, socket.error):

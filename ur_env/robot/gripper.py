@@ -40,10 +40,7 @@ class GripperActionMode(base.Node, abc.ABC):
         self._pos = self._min_position
 
     def get_observation(self):
-        is_object_detected = self._obj_status in (
-            RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
-            RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
-        )
+        is_object_detected = self.object_status
         normed_pos = (self._pos - self._min_position) / self._delta
 
         return {
@@ -70,6 +67,13 @@ class GripperActionMode(base.Node, abc.ABC):
     @property
     def min_position(self):
         return self._min_position
+
+    @property
+    def object_status(self):
+        return self._obj_status in (
+            RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
+            RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
+        )
 
 
 class Discrete(GripperActionMode):

@@ -68,7 +68,7 @@ class Task(abc.ABC):
 
     def __init__(self, rng: Union[int, np.random.Generator], auto_unlock: bool = False):
         if isinstance(rng, int):
-            self._rng = np.random.Generator(rng)
+            self._rng = np.random.default_rng(rng)
         self._auto_unlock = auto_unlock
 
     def get_observation(self, scene) -> NDArrayDict:

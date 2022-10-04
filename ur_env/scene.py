@@ -22,8 +22,8 @@ CfgActionMode = Tuple[str, Dict[str, Any]]
 class SceneConfig(NamedTuple):
     """
     Full scene configuration.
-    If action mode take more kwargs,
-    in that case them should be created by hand.
+    If action modes take more kwargs,
+    in that case they better be created by hand.
     """
     # RTDE
     host: str = "10.201.2.179"
