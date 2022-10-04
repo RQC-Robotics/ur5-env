@@ -60,6 +60,17 @@ class GripperActionMode(base.Node, abc.ABC):
             "object_detected": gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
         }
 
+    def __getattr__(self, name):
+        return getattr(self._gripper, name)
+
+    @property
+    def max_position(self):
+        return self._max_position
+
+    @property
+    def min_position(self):
+        return self._min_position
+
 
 class Discrete(GripperActionMode):
     """Opens or closes gripper."""

@@ -79,9 +79,9 @@ class Task(abc.ABC):
     def get_reward(self, scene) -> float:
         """Returns reward from the environment."""
 
-    @abc.abstractmethod
     def get_termination(self, scene) -> bool:
         """If the episode should end, returns a final discount, otherwise None."""
+        return False
 
     @abc.abstractmethod
     def initialize_episode(self, scene) -> Extra:
@@ -118,10 +118,10 @@ class Task(abc.ABC):
         Here it is possible to handle error.
         """
         if isinstance(exp, SafetyLimitsViolation) and self._auto_unlock:
+            time.sleep(5)  # Unlock can only happen after 5 sec. delay
             client = scene.dashboard_client
             client.closeSafetyPopup()
             client.unlockProtectiveStop()
-            time.sleep(5)  # After unlock, next command must be delayed by 5 sec.
         return 0
 
 
