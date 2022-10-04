@@ -9,7 +9,7 @@ from ur_env import base
 
 class RealSense(base.Node):
     """Intel RealSense D455."""
-    name = "realsense"
+    __name = "realsense"
 
     def __init__(self,
                  width: int = 848,

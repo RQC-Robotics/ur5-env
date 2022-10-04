@@ -169,7 +169,7 @@ class Scene:
 
 def _name_mangling(node_name, obj):
     """
-    To prevent key collision between different nodes.
+    Prevents key collision between different nodes.
     But it still can occur if there are two equal node names.
     """
     if isinstance(obj, MutableMapping):
@@ -183,9 +183,10 @@ def _name_mangling(node_name, obj):
 
 def _check_for_name_collision(nodes: List[base.Node]):
     """It is desirable to have different names for nodes."""
-    unique_names = set(map(lambda n: n.name, nodes))
-    assert len(unique_names) == len(nodes),\
-        f"Name collision: {unique_names}"
+    names = list(map(lambda n: n.name, nodes))
+    unique_names = set(names)
+    assert len(unique_names) == len(names),\
+        f"Name collision: {names}"
 
 
 def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
@@ -216,8 +217,10 @@ class NoOpDashboardClient(DashboardClient):
     shouldn't be used while env is running.
     """
     def loadURP(self, urp_name: str):
-        """Switching programs from running remote control
-        results in deadline error."""
+        """
+        It is always enough to run single External Control URCap program.
+        Switching programs from running remote control
+        results in a deadline error."""
 
     def play(self):
         """
@@ -227,7 +230,7 @@ class NoOpDashboardClient(DashboardClient):
         try:
             super().play()
         except RuntimeError:
-            # Error always raised for whatever reason.
+            # Error is always being raised for whatever reason.
             # Nonetheless, program restarts as if the method was correct.
             pass
 
@@ -235,7 +238,7 @@ class NoOpDashboardClient(DashboardClient):
 def robot_interfaces_factory(
         host: str,
         port: Optional[int] = 50003,
-        frequency: Optional[float] = None,
+        frequency: Optional[float] = -1.,
         variables: Optional[List[str]] = None
 ) -> Tuple[RTDEControlInterface, RTDEReceiveInterface, DashboardClient]:
     """
@@ -244,7 +247,6 @@ def robot_interfaces_factory(
     Actually, it will result in a PolyScope error popup.
     """
     dashboard = NoOpDashboardClient(host)
-    #dashboard = DashboardClient(host)
     dashboard.connect()
     assert dashboard.isInRemoteControl(), "Not in a remote control."
 
@@ -264,7 +266,7 @@ def robot_interfaces_factory(
     rtde_r = RTDEReceiveInterface(
         host,
         frequency=frequency,
-        variables=variables
+        variables=variables or []
     )
 
     assert rtde_r.isConnected()

@@ -18,6 +18,7 @@ class Node(abc.ABC):
     Describes how device should act and update state.
     By default node is uncontrollable.
     """
+    __name = None
 
     def step(self, action: NDArray):
         """
@@ -40,10 +41,10 @@ class Node(abc.ABC):
         """gym-like observation space mapping."""
 
     @property
-    @abc.abstractmethod
     def name(self) -> str:
         """Node identifier. Used as an action key
         and for accessing attributes in a scene."""
+        return self.__name
 
 
 class Task(abc.ABC):

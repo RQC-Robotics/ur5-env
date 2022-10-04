@@ -10,7 +10,7 @@ from ur_env.third_party.robotiq_gripper import RobotiqGripper
 
 class GripperActionMode(base.Node, abc.ABC):
     """Robotiq gripper."""
-    name = "gripper"
+    __name = "gripper"
 
     def __init__(
             self,
