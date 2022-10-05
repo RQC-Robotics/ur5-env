@@ -92,7 +92,7 @@ class ArmActionMode(base.Node):
         """Checks if a resulting pose is consistent with an estimated."""
         self._update_state()
         if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, atol=1e-2):
-            raise base.SafetyLimitsViolation(
+            raise base.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
                 f"{self._estim_next_tcp_pose} and {self._tcp_pose}."
             )
@@ -115,8 +115,10 @@ class ArmActionMode(base.Node):
 
 class TCPPosition(ArmActionMode):
     """
-    Act by specifying next pose of the TCP.
-    action = (x,y,z,rx,ry,rz)
+    Act on TCPPose(x,y,z,rx,ry,rz) by executing moveL comm.
+
+    absolute mode is specifying if control input is a relative difference or
+    final TCPPose.
     """
     def _estimate_next_pose(self, action):
         return action if self._absolute else action + self._tcp_pose

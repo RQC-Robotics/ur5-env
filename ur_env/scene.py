@@ -45,6 +45,12 @@ class SceneConfig(NamedTuple):
     gripper_action_mode: CfgActionMode = ("Discrete", dict(absolute_mode=True))
 
 
+class RobotInterfaces(NamedTuple):
+    rtde_control: RTDEControlInterface
+    rtde_receive: RTDEReceiveInterface
+    dashboard_client: DashboardClient
+
+
 class Scene:
     """Object that holds all the nodes.
     Can be updated by performing action on it
@@ -52,22 +58,12 @@ class Scene:
 
     def __init__(
             self,
-            rtde_c: RTDEControlInterface,
-            rtde_r: RTDEReceiveInterface,
-            dashboard_client: DashboardClient,
-            arm_action_mode: ArmActionMode,
-            gripper_action_mode: GripperActionMode,
-            realsense: RealSense
+            robot_interfaces: RobotInterfaces,
+            *nodes: base.Node,
     ):
-        self._rtde_c = rtde_c
-        self._rtde_r = rtde_r
-        self._dashboard_client = dashboard_client
-        self._nodes = (
-            arm_action_mode,
-            gripper_action_mode,
-            realsense
-        )
-        _check_for_name_collision(self.nodes)
+        self._interfaces = robot_interfaces
+        self._nodes = nodes
+        _check_for_name_collision(self._nodes)
 
     def step(self, action: base.SpecsDict):
         """
@@ -148,11 +144,11 @@ class Scene:
 
     @property
     def rtde_control(self) -> RTDEControlInterface:
-        return self._rtde_c
+        return self._interfaces.rtde_control
 
     @property
     def rtde_receive(self) -> RTDEReceiveInterface:
-        return self._rtde_r
+        return self._interfaces.rtde_receive
 
     @property
     def nodes(self) -> Tuple[base.Node]:
@@ -160,7 +156,11 @@ class Scene:
 
     @property
     def dashboard_client(self) -> DashboardClient:
-        return self._dashboard_client
+        return self._interfaces.dashboard_client
+
+    @property
+    def robot_interfaces(self) -> RobotInterfaces:
+        return self._interfaces
 
 
 def _name_mangling(node_name, obj):
@@ -185,7 +185,7 @@ def _check_for_name_collision(nodes: List[base.Node]):
         f"Name collision: {names}"
 
 
-def load_schema(path: str) -> Tuple[OrderedDict, List[str]]:
+def load_schema(path: Optional[str] = None) -> Tuple[OrderedDict, List[str]]:
     """
     Defines variables that should be transferred between host and robot.
     Schema should contain observables with theirs shapes and dtypes.
@@ -268,4 +268,4 @@ def robot_interfaces_factory(
     assert rtde_r.isConnected()
     assert rtde_c.isConnected()
 
-    return rtde_c, rtde_r, dashboard
+    return RobotInterfaces(rtde_c, rtde_r, dashboard)

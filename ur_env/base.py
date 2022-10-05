@@ -1,4 +1,4 @@
-"""Definition of used classes."""
+"""Base objects definition."""
 import abc
 from typing import NamedTuple, Dict, Any, MutableMapping, Union, Optional
 import time
@@ -110,39 +110,43 @@ class Task(abc.ABC):
         if not rtde_c.isConnected():
             rtde_c.reconnect()
 
-        if not rtde_c.isSteady():
-            time.sleep(1)
+        while not rtde_c.isSteady():
+            pass
 
         return action
 
-    def after_step(self, scene, exp: Optional[Exception] = None) -> float:
-        """
-        Post action step.
-        Here it is possible to handle error.
-        """
-        if isinstance(exp, SafetyLimitsViolation) and self._auto_unlock:
-            time.sleep(5)  # Unlock can only happen after 5 sec. delay
-            client = scene.dashboard_client
+    def after_step(self, scene):
+        """Post action step."""
+        rtde_c, rtde_r, client = scene.robot_interfaces
+        if rtde_r.isProtectiveStop():
+            time.sleep(5.1)  # Unlock can only happen after 5 sec. delay
             client.closeSafetyPopup()
             client.unlockProtectiveStop()
-        return 0
+            rtde_c.reuploadScript()
 
 
 class Environment:
     def __init__(self,
                  scene: "Scene",
                  task: Task,
-                 time_limit: int = float("inf")
+                 time_limit: int = float("inf"),
+                 max_violation_num: int = float("inf")
                  ):
         self._scene = scene
         self._task = task
+
         self._time_limit = time_limit
         self._step_count = 0
+
+        self._max_violations = max_violation_num
+        self._violations = 0
+
         self._prev_obs = None
 
     def reset(self) -> Timestep:
         """Reset episode"""
         self._step_count = 0
+        self._violations = 0
         # Catch errors on init.
         extra = self._task.initialize_episode(self._scene)
         obs = self._task.get_observation(self._scene)
@@ -152,28 +156,32 @@ class Environment:
 
     def step(self, action:  Any) -> Timestep:
         """Perform action and update environment."""
-        action: NDArrayDict = self._task.before_step(action, self._scene)
         try:
+            action: NDArrayDict = self._task.before_step(action, self._scene)
             self._scene.step(action)
-        except SafetyLimitsViolation as exp:
-            reward = self._task.after_step(self._scene, exp)
+        except (SafetyLimitsViolation, PoseEstimationError) as exp:
+            self._violations += 1
+            reward = 0
             observation = self._prev_obs
-            done = True
+            done = isinstance(exp, PoseEstimationError) or\
+                   self._violations >= self._max_violations
             extra = {"exception": str(exp)}
         else:
-            self._task.after_step(self._scene)
             observation = self._task.get_observation(self._scene)
             reward = self._task.get_reward(self._scene)
             extra = self._task.get_extra(self._scene)
 
             self._prev_obs = observation
-            self._step_count += 1
 
             if self._time_limit <= self._step_count:
                 done = True
                 extra.update(time_limit=True)
             else:
                 done = self._task.get_termination(self._scene)
+
+        finally:
+            self._task.after_step(self._scene)
+            self._step_count += 1
 
         return Timestep(observation, reward, done, extra)
 
@@ -197,5 +205,13 @@ class Environment:
         self._scene.close()
 
 
-class SafetyLimitsViolation(Exception):
+class RTDEError(Exception):
+    """Base exception for RTDE interface errors."""
+
+
+class SafetyLimitsViolation(RTDEError):
     """Raise if UR safety limits are violated."""
+
+
+class PoseEstimationError(RTDEError):
+    """Raise if pose estimation is wrong."""

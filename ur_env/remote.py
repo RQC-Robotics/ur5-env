@@ -1,5 +1,5 @@
 """Client-server connection with a robot."""
-from typing import Tuple, Optional, Any, Union, MutableMapping
+from typing import Tuple, Optional, Any, MutableMapping
 
 import abc
 import time

@@ -1,11 +1,11 @@
-ActualCurrent:
-  shape: [6]
-  dtype: float
-
-ActualJointVoltage:
-  shape: [6]
-  dtype: float
-
+#ActualCurrent:
+#  shape: [6]
+#  dtype: float
+#
+#ActualJointVoltage:
+#  shape: [6]
+#  dtype: float
+#
 ActualMomentum:
   shape: []
   dtype: float
@@ -34,37 +34,37 @@ ActualToolAccelerometer:
   shape: [3]
   dtype: float
 
-FtRawWrench:
-  shape: [6]
-  dtype: float
-
-JointControlOutput:
-  shape: [6]
-  dtype: float
-
+#FtRawWrench:
+#  shape: [6]
+#  dtype: float
+#
+#JointControlOutput:
+#  shape: [6]
+#  dtype: float
+#
 TargetMoment:
   shape: [6]
   dtype: float
 
-TargetQ:
-  shape: [6]
-  dtype: float
-
-TargetQd:
-  shape: [6]
-  dtype: float
-
+#TargetQ:
+#  shape: [6]
+#  dtype: float
+#
+#TargetQd:
+#  shape: [6]
+#  dtype: float
+#
 TargetQdd:
   shape: [6]
   dtype: float
 
-TargetTCPPose:
-  shape: [6]
-  dtype: float
-
-TargetTCPSpeed:
-  shape: [6]
-  dtype: float
+#TargetTCPPose:
+#  shape: [6]
+#  dtype: float
+#
+#TargetTCPSpeed:
+#  shape: [6]
+#  dtype: float
 
 # There are more to obtain:
 #getActualDigitalInputBits 0 <class 'int'>
