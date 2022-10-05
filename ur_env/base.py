@@ -103,12 +103,17 @@ class Task(abc.ABC):
         """Pre action step."""
         # Reconnection problem.
         # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
-        rtde_r = scene.rtde_receive
-        rtde_c = scene.rtde_control
+        rtde_c, rtde_r, client = scene.robot_interfaces
         if not rtde_r.isConnected():
             rtde_r.reconnect()
         if not rtde_c.isConnected():
             rtde_c.reconnect()
+
+        if rtde_r.isProtectiveStopped():
+            time.sleep(5.1)  # Unlock can only happen after 5 sec. delay
+            client.closeSafetyPopup()
+            client.unlockProtectiveStop()
+            rtde_c.reuploadScript()
 
         while not rtde_c.isSteady():
             pass
@@ -117,12 +122,6 @@ class Task(abc.ABC):
 
     def after_step(self, scene):
         """Post action step."""
-        rtde_c, rtde_r, client = scene.robot_interfaces
-        if rtde_r.isProtectiveStop():
-            time.sleep(5.1)  # Unlock can only happen after 5 sec. delay
-            client.closeSafetyPopup()
-            client.unlockProtectiveStop()
-            rtde_c.reuploadScript()
 
 
 class Environment:
@@ -130,7 +129,7 @@ class Environment:
                  scene: "Scene",
                  task: Task,
                  time_limit: int = float("inf"),
-                 max_violation_num: int = float("inf")
+                 max_violations_num: int = float("inf")
                  ):
         self._scene = scene
         self._task = task
@@ -138,7 +137,7 @@ class Environment:
         self._time_limit = time_limit
         self._step_count = 0
 
-        self._max_violations = max_violation_num
+        self._max_violations = max_violations_num
         self._violations = 0
 
         self._prev_obs = None
@@ -159,7 +158,7 @@ class Environment:
         try:
             action: NDArrayDict = self._task.before_step(action, self._scene)
             self._scene.step(action)
-        except (SafetyLimitsViolation, PoseEstimationError) as exp:
+        except RTDEError as exp:
             self._violations += 1
             reward = 0
             observation = self._prev_obs

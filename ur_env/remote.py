@@ -12,7 +12,7 @@ import numpy as np
 import gym.spaces
 
 Address = Tuple[str, int]
-DEFAULT_TIMEOUT = 10.
+DEFAULT_TIMEOUT = 30
 PKG_SIZE = 1 << 16
 
 _log = logging.getLogger(__name__)

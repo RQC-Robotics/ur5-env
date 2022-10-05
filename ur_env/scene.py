@@ -109,19 +109,19 @@ class Scene:
     ) -> "Scene":
         """Creates scene from the config."""
         schema, variables = load_schema(cfg.obs_schema)
+        variables = None
 
-        rtde_c, rtde_r, client = robot_interfaces_factory(
+        interfaces = robot_interfaces_factory(
             cfg.host,
             cfg.arm_port,
             cfg.frequency,
             variables
         )
+        rtde_c, rtde_r, client = interfaces
         arm_action_mode, arm_kwargs = cfg.arm_action_mode
         gripper_action_mode, gripper_kwargs = cfg.gripper_action_mode
         return cls(
-            rtde_c,
-            rtde_r,
-            client,
+            interfaces,
             ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, **arm_kwargs),
             ACTION_MODES[gripper_action_mode](
                 cfg.host, cfg.gripper_port, cfg.force, cfg.speed, **gripper_kwargs),
