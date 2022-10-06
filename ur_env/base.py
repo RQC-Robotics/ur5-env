@@ -99,7 +99,7 @@ class Task(abc.ABC):
         """Observation space."""
         return scene.observation_space
 
-    def before_step(self, action: Any, scene) -> NDArrayDict:
+    def before_step(self, action: Any, scene):
         """Pre action step."""
         # Reconnection problem.
         # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
@@ -110,15 +110,15 @@ class Task(abc.ABC):
             rtde_c.reconnect()
 
         if rtde_r.isProtectiveStopped():
-            time.sleep(5.1)  # Unlock can only happen after 5 sec. delay
+            time.sleep(6)  # Unlock can only happen after 5 sec. delay
             client.closeSafetyPopup()
             client.unlockProtectiveStop()
+
+        if not rtde_c.isProgramRunning():
             rtde_c.reuploadScript()
 
         while not rtde_c.isSteady():
             pass
-
-        return action
 
     def after_step(self, scene):
         """Post action step."""
@@ -156,7 +156,7 @@ class Environment:
     def step(self, action:  Any) -> Timestep:
         """Perform action and update environment."""
         try:
-            action: NDArrayDict = self._task.before_step(action, self._scene)
+            self._task.before_step(action, self._scene)
             self._scene.step(action)
         except RTDEError as exp:
             self._violations += 1
@@ -165,6 +165,7 @@ class Environment:
             done = isinstance(exp, PoseEstimationError) or\
                    self._violations >= self._max_violations
             extra = {"exception": str(exp)}
+            print(exp)
         else:
             observation = self._task.get_observation(self._scene)
             reward = self._task.get_reward(self._scene)

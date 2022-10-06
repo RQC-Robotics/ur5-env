@@ -13,7 +13,6 @@ from dashboard_client import DashboardClient
 from ur_env import base
 from ur_env.cameras.realsense import RealSense
 from ur_env.robot import ACTION_MODES
-from ur_env.robot import ArmActionMode, GripperActionMode
 
 # action mode class name + kwargs:
 CfgActionMode = Tuple[str, Dict[str, Any]]
@@ -29,7 +28,7 @@ class SceneConfig(NamedTuple):
     host: str = "10.201.2.179"
     arm_port: int = 50003
     gripper_port: int = 63352
-    frequency: float = 20
+    frequency: float = 300
 
     # UR
     obs_schema: Optional[str] = None
