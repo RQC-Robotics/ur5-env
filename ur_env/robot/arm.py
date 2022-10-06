@@ -80,12 +80,6 @@ class ArmActionMode(base.Node):
 
     def _pre_action(self, action: base.NDArray):
         """Checks if an action can be performed safely."""
-        if not all([
-            self._rtde_c.isConnected(),
-            self._rtde_c.isProgramRunning(),
-            self._rtde_c.isSteady(),
-        ]):
-            raise base.RTDEError("RTDEControl is not ready.")
         self._update_state()
         self._estim_next_tcp_pose = self._estimate_next_pose(action)
         if not self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_next_tcp_pose)):
@@ -95,9 +89,13 @@ class ArmActionMode(base.Node):
     def _post_action(self):
         """Checks if a resulting pose is consistent with an estimated."""
         if not self._rtde_c.isProgramRunning():
-            raise base.RTDEError("Program is not running")
+            self._rtde_c.reuploadScript()
+
+        while not self._rtde_c.isSteady():
+            pass
+
         self._update_state()
-        if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, rtol=.15):
+        if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, rtol=.1):
             raise base.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
                 f"{self._estim_next_tcp_pose} and {self._tcp_pose}."
@@ -131,7 +129,7 @@ class TCPPosition(ArmActionMode):
 
     def _act_fn(self, action: base.NDArray) -> bool:
         pose = self._estimate_next_pose(action)
-        return self._rtde_c.moveL(list(pose), speed=.15, acceleration=.7)
+        return self._rtde_c.moveL(list(pose))
 
     @property
     def action_space(self) -> base.Specs:

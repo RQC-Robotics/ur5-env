@@ -28,7 +28,7 @@ class SceneConfig(NamedTuple):
     host: str = "10.201.2.179"
     arm_port: int = 50003
     gripper_port: int = 63352
-    frequency: float = 300
+    frequency: float = 400
 
     # UR
     obs_schema: Optional[str] = None

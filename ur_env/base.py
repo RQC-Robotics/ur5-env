@@ -66,10 +66,9 @@ class Task(abc.ABC):
     Defines relevant for RL task methods.
     """
 
-    def __init__(self, rng: Union[int, np.random.Generator], auto_unlock: bool = False):
+    def __init__(self, rng: Union[int, np.random.Generator]):
         if isinstance(rng, int):
             self._rng = np.random.default_rng(rng)
-        self._auto_unlock = auto_unlock
 
     def get_observation(self, scene) -> NDArrayDict:
         """Returns observation from the environment."""
@@ -103,25 +102,21 @@ class Task(abc.ABC):
         """Pre action step."""
         # Reconnection problem.
         # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
-        rtde_c, rtde_r, client = scene.robot_interfaces
+        rtde_c, rtde_r, dashboard = scene.robot_interfaces
         if not rtde_r.isConnected():
             rtde_r.reconnect()
         if not rtde_c.isConnected():
             rtde_c.reconnect()
 
-        if rtde_r.isProtectiveStopped():
-            time.sleep(6)  # Unlock can only happen after 5 sec. delay
-            client.closeSafetyPopup()
-            client.unlockProtectiveStop()
-
-        if not rtde_c.isProgramRunning():
-            rtde_c.reuploadScript()
-
-        while not rtde_c.isSteady():
-            pass
-
     def after_step(self, scene):
         """Post action step."""
+        rtde_c, rtde_r, dashboard = scene.robot_interfaces
+
+        if rtde_r.isProtectiveStopped():
+            print("Protective stop triggered!")
+            time.sleep(6)  # Unlock can only happen after 5 sec. delay
+            dashboard.unlockProtectiveStop()
+            dashboard.play()
 
 
 class Environment:
@@ -162,7 +157,7 @@ class Environment:
             self._violations += 1
             reward = 0
             observation = self._prev_obs
-            done = isinstance(exp, PoseEstimationError) or\
+            done = isinstance(exp, (PoseEstimationError, ProtectiveStop)) or \
                    self._violations >= self._max_violations
             extra = {"exception": str(exp)}
             print(exp)
@@ -215,3 +210,7 @@ class SafetyLimitsViolation(RTDEError):
 
 class PoseEstimationError(RTDEError):
     """Raise if pose estimation is wrong."""
+
+
+class ProtectiveStop(RTDEError):
+    """Raise if protective stop is triggered."""

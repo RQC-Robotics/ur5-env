@@ -12,7 +12,7 @@ import numpy as np
 import gym.spaces
 
 Address = Tuple[str, int]
-DEFAULT_TIMEOUT = 30
+DEFAULT_TIMEOUT = 60
 PKG_SIZE = 1 << 16
 
 _log = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class RemoteEnvClient(RemoteBase):
 
         try:
             self._sock = socket.socket()
-            self._sock.settimeout(DEFAULT_TIMEOUT)
+            # self._sock.settimeout(DEFAULT_TIMEOUT)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
@@ -128,7 +128,7 @@ class RemoteEnvServer(RemoteBase):
             sock.listen(1)
             self._sock, add = sock.accept()
             _log.info(f"Connection established: {add}.")
-        except (socket.timeout, socket.error):
+        except socket.error:
             self._sock = None
             raise
 
