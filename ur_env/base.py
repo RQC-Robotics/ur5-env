@@ -40,7 +40,7 @@ class Node(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def obszervation_space(self) -> SpecsDict:
+    def observation_space(self) -> SpecsDict:
         """gym-like observation space mapping."""
 
     @property

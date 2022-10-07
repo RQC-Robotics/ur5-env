@@ -129,10 +129,11 @@ class Scene:
 
     def close(self):
         """Close all connections, shutdown robot and camera."""
-        self._dashboard_client.stop()
-        self._rtde_r.disconnect()
-        self._rtde_c.disconnect()
-        self._dashboard_client.disconnect()
+        rtde_c, rtde_r, dashboard = self._interfaces
+        dashboard.stop()
+        rtde_r.disconnect()
+        rtde_c.disconnect()
+        dashboard.disconnect()
         self.realsense.pipeline.stop()
 
     # While making things easier it can cause troubles.

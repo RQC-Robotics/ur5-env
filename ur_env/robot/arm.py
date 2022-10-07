@@ -92,9 +92,6 @@ class ArmActionMode(base.Node):
             raise base.ProtectiveStop(
                 "Safety mode is not in normal or reduced mode.")
 
-        while not self._rtde_c.isSteady():
-            pass
-
         self._update_state()
         if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, rtol=.2):
             raise base.PoseEstimationError(
