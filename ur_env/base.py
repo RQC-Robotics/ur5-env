@@ -1,6 +1,6 @@
 """Base objects definition."""
 import abc
-from typing import NamedTuple, Dict, Any, MutableMapping, Union, Optional
+from typing import NamedTuple, Dict, Any, MutableMapping, Union, Tuple
 import time
 
 import gym.spaces
@@ -40,7 +40,7 @@ class Node(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def observation_space(self) -> SpecsDict:
+    def obszervation_space(self) -> SpecsDict:
         """gym-like observation space mapping."""
 
     @property
@@ -70,21 +70,28 @@ class Task(abc.ABC):
         if isinstance(rng, int):
             self._rng = np.random.default_rng(rng)
 
+    @abc.abstractmethod
+    def initialize_episode(self, scene) -> Extra:
+        """Reset task and prepare for new interactions."""
+
+    @abc.abstractmethod
+    def get_success(self, scene) -> Tuple[bool, Any]:
+        """Notion of `success` represents the true task goal
+         and can differ from the shaped reward.
+         Returns success flag and optional information.
+         """
+
     def get_observation(self, scene) -> NDArrayDict:
         """Returns observation from the environment."""
         return scene.get_observation()
 
-    @abc.abstractmethod
     def get_reward(self, scene) -> float:
         """Returns reward from the environment."""
+        return float(self.get_success(scene))
 
     def get_termination(self, scene) -> bool:
         """If the episode should end, returns a final discount, otherwise None."""
         return False
-
-    @abc.abstractmethod
-    def initialize_episode(self, scene) -> Extra:
-        """Reset task and prepare for new interactions."""
 
     def get_extra(self, scene) -> Extra:
         """Optional information required to solve the task."""
@@ -111,12 +118,13 @@ class Task(abc.ABC):
     def after_step(self, scene):
         """Post action step."""
         rtde_c, rtde_r, dashboard = scene.robot_interfaces
-
-        if rtde_r.isProtectiveStopped():
+        is_running = rtde_r.getRobotMode() == 7
+        if rtde_r.isProtectiveStopped() or not is_running:
             print("Protective stop triggered!")
             time.sleep(6)  # Unlock can only happen after 5 sec. delay
+            dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
-            dashboard.play()
+            rtde_c.reuploadScript()
 
 
 class Environment:

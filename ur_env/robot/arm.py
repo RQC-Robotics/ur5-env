@@ -88,14 +88,15 @@ class ArmActionMode(base.Node):
 
     def _post_action(self):
         """Checks if a resulting pose is consistent with an estimated."""
-        if not self._rtde_c.isProgramRunning():
-            self._rtde_c.reuploadScript()
+        if self._rtde_r.getSafetyMode() > 1:
+            raise base.ProtectiveStop(
+                "Safety mode is not in normal or reduced mode.")
 
         while not self._rtde_c.isSteady():
             pass
 
         self._update_state()
-        if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, rtol=.1):
+        if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, rtol=.2):
             raise base.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
                 f"{self._estim_next_tcp_pose} and {self._tcp_pose}."
