@@ -114,6 +114,7 @@ class Task(abc.ABC):
             rtde_r.reconnect()
         if not rtde_c.isConnected():
             rtde_c.reconnect()
+        return self.preprocess_action(action, scene)
 
     def after_step(self, scene):
         """Post action step."""
@@ -125,6 +126,10 @@ class Task(abc.ABC):
             dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
             rtde_c.reuploadScript()
+
+    def preprocess_action(self, action, scene):
+        """Use to prepare compatible with the scene action."""
+        return action
 
 
 class Environment:
@@ -159,7 +164,7 @@ class Environment:
     def step(self, action:  Any) -> Timestep:
         """Perform action and update environment."""
         try:
-            self._task.before_step(action, self._scene)
+            action = self._task.before_step(action, self._scene)
             self._scene.step(action)
         except RTDEError as exp:
             self._violations += 1
