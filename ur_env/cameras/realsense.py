@@ -20,7 +20,7 @@ class RealSense(base.Node):
         self._build()
 
     def get_observation(self) -> base.NDArrayDict:
-        frames = [self.capture_frameset() for _ in range(4)]
+        frames = [self.capture_frameset() for _ in range(8)]
         rgb, depth, points = self._postprocess(frames)
         verts = np.asanyarray(points.get_vertices()).view(np.float32) \
             .reshape(self._depth_height, self._depth_width, 3)
@@ -46,14 +46,11 @@ class RealSense(base.Node):
         Process a sequence of frames.
         Temporal processing is only useful for static scene.
         """
-        depth_temporal = rs.temporal_filter()
-        rgb_temporal = rs.temporal_filter()
         for depth, rgb in frames:
-            depth_frame = depth_temporal.process(depth)
-            rgb_frame = rgb_temporal.process(rgb)
+            depth_frame = self._temporal.process(depth)
         pcd = rs.pointcloud()
         points = pcd.calculate(depth_frame)
-        return rgb_frame, depth_frame, points
+        return rgb, depth_frame, points
 
     def capture_frameset(self):
         """Obtains single frameset."""
@@ -73,9 +70,9 @@ class RealSense(base.Node):
         self._config = rs.config()
         self._align = rs.align(rs.stream.color)
         self._pc = rs.pointcloud()
-        self._temporal = rs.temporal_filter()
+        self._temporal = rs.temporal_filter(0.9, 20, 7)
         self._decimation = rs.decimation_filter()
-        self._hole_filling = rs.hole_filling_filter(2)
+        self._hole_filling = rs.hole_filling_filter(1)
 
         self._config.enable_stream(
             rs.stream.depth, width=self._width, height=self._height)
@@ -84,8 +81,8 @@ class RealSense(base.Node):
 
         self._profile = self._pipeline.start(self._config)
         # Set High Accuracy preset.
-        depth_sensor = self._profile.get_device().first_depth_sensor()
-        depth_sensor.set_option(rs.option.visual_preset, 3)
+        #depth_sensor = self._profile.get_device().first_depth_sensor()
+        #depth_sensor.set_option(rs.option.visual_preset, 3)
 
         # Wait for auto calibration and update shapes after processing.
         for _ in range(5):

@@ -28,7 +28,7 @@ class GripperActionMode(base.Node, abc.ABC):
         def rescale(x):
             return int(255 * x / 100.)
 
-        self._move = lambda pos: gripper.move_and_wait_for_pos(
+        self.move = lambda pos: gripper.move_and_wait_for_pos(
             pos, rescale(speed), rescale(force)
         )
         self._absolute = absolute_mode
@@ -80,7 +80,7 @@ class Discrete(GripperActionMode):
     """Opens or closes gripper."""
 
     def step(self, action: base.NDArray):
-        self._pos, self._obj_status = self._move(
+        self._pos, self._obj_status = self.move(
             self._max_position if action > 0.5 else self._min_position
         )
 
@@ -94,7 +94,7 @@ class Continuous(GripperActionMode):
 
     def step(self, action: base.NDArray):
         pos = action if self._absolute else self._pos + action
-        self._pos, self._obj_status = self._move(pos)
+        self._pos, self._obj_status = self.move(pos)
 
     @property
     def action_space(self) -> base.Specs:

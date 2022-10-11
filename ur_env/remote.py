@@ -227,6 +227,8 @@ def _check_equal_limits(box: gym.spaces.Box):
 
 def _convert_specs(specs):
     """Compress gym.spaces.Box if possible."""
+    return specs
+    # TODO: broken
     if isinstance(specs, MutableMapping):
         for key, spec in specs.items():
             specs[key] = HomogenousBox.maybe_convert_box(spec)
