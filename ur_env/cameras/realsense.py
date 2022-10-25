@@ -57,7 +57,7 @@ class RealSense(base.Node):
         frameset = self._pipeline.wait_for_frames()
         frameset = self._align.process(frameset)
         depth = frameset.get_depth_frame()
-        depth = self._decimation.process(depth)
+        #depth = self._decimation.process(depth)
         depth = self._hole_filling.process(depth)
         return depth, frameset.get_color_frame()
 
