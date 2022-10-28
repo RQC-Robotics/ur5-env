@@ -1,5 +1,4 @@
 import abc
-from typing import Optional
 
 import gym
 import numpy as np
@@ -15,9 +14,9 @@ class GripperActionMode(base.Node, abc.ABC):
     def __init__(
             self,
             host: str,
-            port: Optional[int] = 63352,
-            force: Optional[int] = 100,
-            speed: Optional[int] = 100,
+            port: int = 63352,
+            force: int = 100,
+            speed: int = 100,
             absolute_mode: bool = True
     ):
         """Pos, speed and force are constrained in [0, 255]."""
@@ -54,7 +53,8 @@ class GripperActionMode(base.Node, abc.ABC):
         return {
             "is_closed": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
             "pose": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
-            "object_detected": gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
+            "object_detected": gym.spaces.Box(
+                low=0, high=1, shape=(), dtype=float)
         }
 
     def __getattr__(self, name):
@@ -86,17 +86,21 @@ class Discrete(GripperActionMode):
 
     @property
     def action_space(self) -> base.Specs:
-        return gym.spaces.Box(low=0, high=1, shape=(), dtype=float)
+        return gym.spaces.Box(low=0., high=1., shape=(), dtype=float)
 
 
 class Continuous(GripperActionMode):
     """Fine-grained control of a gripper."""
 
     def step(self, action: base.NDArray):
-        pos = action if self._absolute else self._pos + action
+        action = int(self._delta * (action + 1.) / 2 + self._min_position)
+        if self._absolute:
+            pos = action
+        else:
+            pos = self._pos + action
+            pos = np.clip(pos, self._min_position, self._max_position)
         self._pos, self._obj_status = self.move(pos)
 
     @property
     def action_space(self) -> base.Specs:
-        low = 0 if self._absolute else -255
-        return gym.spaces.Box(low=low, high=255, shape=(), dtype=np.int8)
+        return gym.spaces.Box(low=-1., high=1., shape=(), dtype=float)

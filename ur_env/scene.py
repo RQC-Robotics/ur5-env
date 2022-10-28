@@ -5,7 +5,7 @@ import pathlib
 import functools
 from collections import OrderedDict
 
-from ruamel.yaml import YAML
+from ruamel import yaml
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
 from dashboard_client import DashboardClient
@@ -19,11 +19,7 @@ CfgActionMode = Tuple[str, Dict[str, Any]]
 
 
 class SceneConfig(NamedTuple):
-    """
-    Full scene configuration.
-    If action modes take more kwargs,
-    in that case they better be created by hand.
-    """
+    """Full scene configuration."""
     # RTDE
     host: str = "10.201.2.179"
     arm_port: int = 50003
@@ -51,7 +47,8 @@ class RobotInterfaces(NamedTuple):
 
 
 class Scene:
-    """Object that holds all the nodes.
+    """Object that conduct all nodes.
+
     Can be updated by performing action on it
     and then queried to obtain observation."""
 
@@ -65,8 +62,7 @@ class Scene:
         _check_for_name_collision(self._nodes)
 
     def step(self, action: base.SpecsDict):
-        """
-        Scene can be updated partially
+        """Scene can be updated partially
         if some nodes are not present in an action keys.
         """
         for node in self._nodes:
@@ -123,7 +119,8 @@ class Scene:
             interfaces,
             ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, **arm_kwargs),
             ACTION_MODES[gripper_action_mode](
-                cfg.host, cfg.gripper_port, cfg.force, cfg.speed, **gripper_kwargs),
+                cfg.host, cfg.gripper_port, cfg.force,
+                cfg.speed, **gripper_kwargs),
             RealSense(width=cfg.width, height=cfg.height)
         )
 
@@ -193,9 +190,9 @@ def load_schema(path: Optional[str] = None) -> Tuple[OrderedDict, List[str]]:
     if path is None:
         path = pathlib.Path(__file__).parent
         path = path / "robot" / "observations_schema.yaml"
-    yaml = YAML()
+
     with open(path, encoding="utf-8") as file:
-        schema = yaml.load(file)
+        schema = yaml.safe_load(file)
 
     def _as_rtde_variable(variable):
         for match in re.findall(r"[A-Z]", variable):
@@ -233,8 +230,8 @@ class NoOpDashboardClient(DashboardClient):
 
 def robot_interfaces_factory(
         host: str,
-        port: Optional[int] = 50003,
-        frequency: Optional[float] = -1.,
+        port: int = 50003,
+        frequency: float = -1.,
         variables: Optional[List[str]] = None
 ) -> Tuple[RTDEControlInterface, RTDEReceiveInterface, DashboardClient]:
     """

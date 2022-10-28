@@ -17,26 +17,23 @@ Extra = Dict[str, Any]
 
 
 class Node(abc.ABC):
-    """
-    Describes how device should act and update state.
+    """Describes how device should act and update state.
+
     By default node is uncontrollable.
     """
     _name = None
 
     def step(self, action: NDArray):
-        """
-        Performs action and update state.
-        No-op by default.
-        """
+        """Performs action and update state."""
 
     @abc.abstractmethod
     def get_observation(self) -> NDArrayDict:
         """Returns an observation from the node."""
 
     @property
-    def action_space(self) -> Union[Specs, SpecsDict, None]:
+    def action_space(self) -> Union[Specs, SpecsDict]:
         """gym-like action space mapping."""
-        return None
+        return {}
 
     @property
     @abc.abstractmethod
@@ -51,8 +48,8 @@ class Node(abc.ABC):
 
 
 class Timestep(NamedTuple):
-    """"
-    Default transition tuple emitted after interaction with an env.
+    """"Default transition tuple emitted after interaction with an env.
+
     Extra may hold additional info required for solving task.
     """
     observation: NDArrayDict
@@ -62,9 +59,7 @@ class Timestep(NamedTuple):
 
 
 class Task(abc.ABC):
-    """
-    Defines relevant for RL task methods.
-    """
+    """Defines relevant for RL task methods."""
 
     def __init__(self, rng: Union[int, np.random.Generator]):
         if isinstance(rng, int):
@@ -87,10 +82,10 @@ class Task(abc.ABC):
 
     def get_reward(self, scene) -> float:
         """Returns reward from the environment."""
-        return float(self.get_success(scene))
+        return float(self.get_success(scene)[0])
 
     def get_termination(self, scene) -> bool:
-        """If the episode should end, returns a final discount, otherwise None."""
+        """If the episode must terminate."""
         return False
 
     def get_extra(self, scene) -> Extra:
@@ -133,6 +128,8 @@ class Task(abc.ABC):
 
 
 class Environment:
+    """Ordinary RL environment."""
+
     def __init__(self,
                  scene: "Scene",
                  task: Task,
@@ -159,7 +156,7 @@ class Environment:
         obs = self._task.get_observation(self._scene)
         extra.update(self._task.get_extra(self._scene))
         self._prev_obs = obs
-        return Timestep(observation=obs, reward=0, done=False, extra=extra)
+        return Timestep(observation=obs, reward=0., done=False, extra=extra)
 
     def step(self, action:  Any) -> Timestep:
         """Perform action and update environment."""
@@ -168,10 +165,11 @@ class Environment:
             self._scene.step(action)
         except RTDEError as exp:
             self._violations += 1
-            reward = 0
+            reward = 0.
             observation = self._prev_obs
-            done = isinstance(exp, (PoseEstimationError, ProtectiveStop)) or \
-                   self._violations >= self._max_violations
+            done = \
+                isinstance(exp, (PoseEstimationError, ProtectiveStop)) \
+                or self._violations >= self._max_violations
             extra = {"exception": str(exp)}
             print(exp)
         else:

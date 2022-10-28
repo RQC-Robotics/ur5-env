@@ -1,5 +1,5 @@
 """Client-server connection with a robot."""
-from typing import Tuple, Optional, Any, MutableMapping
+from typing import Tuple, Optional, Any
 
 import abc
 import time
@@ -7,9 +7,6 @@ import struct
 import socket
 import pickle
 import logging
-
-import numpy as np
-import gym.spaces
 
 Address = Tuple[str, int]
 DEFAULT_TIMEOUT = 60
@@ -29,7 +26,7 @@ class Command:
 
 class RemoteBase(abc.ABC):
     """Unsafe and inefficient data transmission via pickle."""
-    def __init__(self, address: Optional[Address]):
+    def __init__(self, address: Optional[Address] = None):
         self._sock: socket.socket = None
         if address:
             self.connect(address)
@@ -114,7 +111,7 @@ class RemoteEnvClient(RemoteBase):
 class RemoteEnvServer(RemoteBase):
     """Server side hosting a robot."""
 
-    def __init__(self, env, address: Address):
+    def __init__(self, env, address: Optional[Address] = None):
         self._env = env
         super().__init__(address)
 
@@ -140,6 +137,7 @@ class RemoteEnvServer(RemoteBase):
                 self._on_receive(cmd)
         except (EOFError, KeyboardInterrupt, ConnectionResetError) as exp:
             _log.error("Connection interrupted.", exc_info=exp)
+            self._sock = None
             raise
 
     def _on_receive(self, cmd: int):
@@ -155,12 +153,13 @@ class RemoteEnvServer(RemoteBase):
             data = "PING!"
         elif cmd == Command.CLOSE:
             self.close()
-            return
         else:
             msg = f"Unknown command: {cmd}"
             _log.error(msg)
             raise ValueError(msg)
 
+        if cmd == Command.CLOSE:
+            return
         return self._send(data)
 
     def step(self):
@@ -168,70 +167,12 @@ class RemoteEnvServer(RemoteBase):
         return self._env.step(action)
 
     def action_space(self):
-        act_space = self._env.action_space
-        return _convert_specs(act_space)
+        return self._env.action_space
 
     def observation_space(self):
-        obs_space = self._env.observation_space
-        return _convert_specs(obs_space)
+        return self._env.observation_space
 
     def close(self):
         self._env.close()
         self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
-
-
-class HomogenousBox(gym.spaces.Box):
-    """
-    The main difference is that the lower and upper bounds
-    are represented by one number instead of a full array.
-    This implies limited usage of such an object,
-    but saves memory and, hence, eases pickling.
-    """
-
-    def __init__(self, low: float, high: float, shape=None, dtype=np.float32, seed=None):
-        super().__init__(low, high, shape, dtype, seed)
-
-    def __getstate__(self):
-        return self.low.item(0), self.high.item(0), self.shape, self.dtype, self._np_random
-
-    def __setstate__(self, state):
-        low, high, shape, dtype, random = state
-        lower_bound = np.full(shape, low, dtype)
-        upper_bound = np.full(shape, high, dtype)
-        self.__dict__.update(
-            dtype=dtype,
-            low=lower_bound,
-            high=upper_bound,
-            low_repr=str(low),
-            high_repr=str(high),
-            bounded_below=np.isfinite(lower_bound),
-            bounded_above=np.isfinite(upper_bound),
-            _shape=shape,
-            _np_random=random
-        )
-
-    @classmethod
-    def maybe_convert_box(cls, box):
-        """Tries to convert Box to HommBox if it is possible."""
-        if not isinstance(box, gym.spaces.Box) and not _check_equal_limits(box):
-            return box
-        return cls(box.low.item(0), box.high.item(0), box.shape, box.dtype, box.np_random)
-
-
-def _check_equal_limits(box: gym.spaces.Box):
-    low = box.low
-    high = box.high
-    return np.all(low.item(0) == low) and np.all(high.item(0) == high)
-
-
-def _convert_specs(specs):
-    """Compress gym.spaces.Box if possible."""
-    return specs
-    # TODO: broken
-    if isinstance(specs, MutableMapping):
-        for key, spec in specs.items():
-            specs[key] = HomogenousBox.maybe_convert_box(spec)
-    else:
-        specs = HomogenousBox.maybe_convert_box(specs)
-    return specs

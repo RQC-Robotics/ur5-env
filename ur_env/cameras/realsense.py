@@ -36,14 +36,17 @@ class RealSense(base.Node):
         rgb_shape = (self._height, self._width)
         depth_shape = (self._depth_height, self._depth_width)
         return {
-            'depth': gym.spaces.Box(0, np.inf, shape=depth_shape, dtype=np.float32),
-            'image': gym.spaces.Box(0, 255, shape=rgb_shape+(3,), dtype=np.uint8),
-            'point_cloud': gym.spaces.Box(0, np.inf, shape=depth_shape+(3,), dtype=np.float32)
+            'depth': gym.spaces.Box(
+                0, np.inf, shape=depth_shape, dtype=np.float32),
+            'image': gym.spaces.Box(
+                0, 255, shape=rgb_shape+(3,), dtype=np.uint8),
+            'point_cloud': gym.spaces.Box(
+                0, np.inf, shape=depth_shape+(3,), dtype=np.float32)
         }
 
     def _postprocess(self, frames: List[rs.frame]):
-        """
-        Process a sequence of frames.
+        """Process a sequence of frames.
+
         Temporal processing is only useful for static scene.
         """
         for depth, rgb in frames:
@@ -62,9 +65,8 @@ class RealSense(base.Node):
         return depth, frameset.get_color_frame()
 
     def _build(self):
-        """
-        Most of the following are not required at all
-        but still present here to explore and remind camera possibilities.
+        """Most of the following are not required at all
+        but still present here to explore and remind of camera possibilities.
         """
         self._pipeline = rs.pipeline()
         self._config = rs.config()
@@ -87,7 +89,8 @@ class RealSense(base.Node):
         # Wait for auto calibration and update shapes after processing.
         for _ in range(5):
             depth, rgb = self.capture_frameset()
-        self._depth_height, self._depth_width = np.asanyarray(depth.get_data()).shape
+        self._depth_height, self._depth_width =\
+            np.asanyarray(depth.get_data()).shape
 
     @property
     def pipeline(self):

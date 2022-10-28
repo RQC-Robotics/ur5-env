@@ -11,7 +11,9 @@ from ur_env import base
 
 
 class ArmObservation:
-    """Polls receiver multiple times to get all the observations specified in a scheme."""
+    """Polls receiver multiple times to get all the observations
+     specified in a scheme.
+     """
     def __init__(self,
                  rtde_r: RTDEReceiveInterface,
                  schema: OrderedDict,
@@ -31,11 +33,12 @@ class ArmObservation:
     def observation_space(self):
         obs_space = OrderedDict()
         _types = dict(int=int)
+        # Limits should also be obtained from the schema.
         for key, spec_dict in self._schema.items():
             obs_space[key] = gym.spaces.Box(
-                low=-np.inf, high=np.inf,  # limits should also be obtained from the schema.
+                low=-np.inf, high=np.inf,
                 shape=tuple(spec_dict["shape"]),
-                dtype=_types.get(spec_dict["dtype"], np.float32)
+                dtype=_types.get(spec_dict["dtype"], float)
             )
         return obs_space
 
@@ -50,20 +53,17 @@ class ArmActionMode(base.Node):
             rtde_r: RTDEReceiveInterface,
             schema: OrderedDict,
             absolute_mode: bool = True,
-            **kwargs
     ):
-        """
-        Schema specifies desirable observables: name, shape, dtype.
+        """Schema specifies desirable observables: name, shape, dtype.
+
         Absolute flag switches between absolute or relative coordinates change.
-        Some action modes may require additional params which are stored in kwargs.
         """
         self._rtde_c = rtde_c
         self._rtde_r = rtde_r
         self._absolute = absolute_mode
         self._observation = ArmObservation(rtde_r, schema)
         self._update_state()
-        self._kwargs = kwargs
-        self._estim_next_tcp_pose = None
+        self._tcp_estim = None
 
     def step(self, action: base.NDArray):
         self._pre_action(action)
@@ -81,10 +81,10 @@ class ArmActionMode(base.Node):
     def _pre_action(self, action: base.NDArray):
         """Checks if an action can be performed safely."""
         self._update_state()
-        self._estim_next_tcp_pose = self._estimate_next_pose(action)
-        if not self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_next_tcp_pose)):
+        self._tcp_estim = self._estimate_next_pose(action)
+        if not self._rtde_c.isPoseWithinSafetyLimits(list(self._tcp_estim)):
             raise base.SafetyLimitsViolation(
-                f"Safety limits violation: {self._estim_next_tcp_pose}")
+                f"Safety limits violation: {self._tcp_estim}")
 
     def _post_action(self):
         """Checks if a resulting pose is consistent with an estimated."""
@@ -93,10 +93,10 @@ class ArmActionMode(base.Node):
                 "Safety mode is not in normal or reduced mode.")
 
         self._update_state()
-        if not np.allclose(self._estim_next_tcp_pose, self._tcp_pose, rtol=.2):
+        if not np.allclose(self._tcp_estim, self._tcp_pose, rtol=.2):
             raise base.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
-                f"{self._estim_next_tcp_pose} and {self._tcp_pose}."
+                f"{self._tcp_estim} and {self._tcp_pose}."
             )
 
     @abc.abstractmethod
@@ -108,19 +108,18 @@ class ArmActionMode(base.Node):
         return self._observation.observation_space
 
     def _update_state(self):
-        """
-        Action command or next pose estimation may require knowledge of the current state.
+        """Action command or next pose estimation
+         may require knowledge of the current state.
         """
         self._tcp_pose = np.asarray(self._rtde_r.getActualTCPPose())
         self._joints_pos = np.asarray(self._rtde_r.getActualQ())
 
 
 class TCPPosition(ArmActionMode):
-    """
-    Act on TCPPose(x,y,z,rx,ry,rz) by executing moveL comm.
+    """Act on TCPPose(x,y,z,rx,ry,rz) by executing moveL comm.
 
-    absolute mode is specifying if control input is a relative difference or
-    final TCPPose.
+    Absolute mode is specifying if control input is a relative difference or
+    a final TCPPose.
     """
     def _estimate_next_pose(self, action):
         return action if self._absolute else action + self._tcp_pose
@@ -147,8 +146,7 @@ def fracture_trajectory(
         acceleration: Union[float, List[float]] = 0.5,
         blend: Union[float, List[float]] = .0,
 ):
-    """
-    Splits trajectory to equidistant (per dimension) intermediate waypoints.
+    """Splits trajectory to equidistant (per dimension) intermediate waypoints.
 
     Speed, accel. and blend are concatenated to waypoints, so
     command signature for path differs from move to pose.
