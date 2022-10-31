@@ -12,10 +12,8 @@ from dashboard_client import DashboardClient
 
 from ur_env import base
 from ur_env.cameras.realsense import RealSense
+from ur_env.cameras.kinect import Kinect
 from ur_env.robot import ACTION_MODES
-
-# action mode class name + kwargs:
-CfgActionMode = Tuple[str, Dict[str, Any]]
 
 
 class SceneConfig(NamedTuple):
@@ -28,16 +26,20 @@ class SceneConfig(NamedTuple):
 
     # UR
     obs_schema: Optional[str] = None
-    arm_action_mode: CfgActionMode = ("TCPPosition", dict(absolute_mode=True))
+    arm_action_mode: str = "TCPPosition"
+    arm_speed: float = .25
+    arm_acceleration: float = 1.2
+    arm_absolute_mode: bool = True
 
     # RealSense
-    width: int = 848
-    height: int = 480
+    realsense_width: int = 848
+    realsense_height: int = 480
 
     # Robotiq
-    force: int = 100
-    speed: int = 100
-    gripper_action_mode: CfgActionMode = ("Discrete", dict(absolute_mode=True))
+    gripper_action_mode: str = "Discrete"
+    gripper_force: int = 100
+    gripper_speed: int = 100
+    gripper_absolute_mode: bool = True
 
 
 class RobotInterfaces(NamedTuple):
@@ -61,7 +63,7 @@ class Scene:
         self._nodes = nodes
         _check_for_name_collision(self._nodes)
 
-    def step(self, action: base.SpecsDict):
+    def step(self, action: Dict[str, base.Action]):
         """Scene can be updated partially
         if some nodes are not present in an action keys.
         """
@@ -70,7 +72,7 @@ class Scene:
             if node_action is not None:
                 node.step(node_action)
 
-    def get_observation(self) -> base.NDArrayDict:
+    def get_observation(self) -> base.Observation:
         """Gathers all observations."""
         observations = OrderedDict()
         for node in self._nodes:
@@ -80,7 +82,7 @@ class Scene:
         return observations
 
     @functools.cached_property
-    def observation_space(self) -> base.SpecsDict:
+    def observation_space(self) -> base.ObservationSpecs:
         """Gathers all observation specs."""
         obs_specs = OrderedDict()
         for node in self._nodes:
@@ -89,7 +91,7 @@ class Scene:
         return obs_specs
 
     @functools.cached_property
-    def action_space(self) -> base.SpecsDict:
+    def action_space(self) -> Dict[str, base.ActionSpec]:
         """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
@@ -113,15 +115,22 @@ class Scene:
             variables
         )
         rtde_c, rtde_r, client = interfaces
-        arm_action_mode, arm_kwargs = cfg.arm_action_mode
-        gripper_action_mode, gripper_kwargs = cfg.gripper_action_mode
+        arm_action_mode = ACTION_MODES[cfg.arm_action_mode](
+            rtde_c, rtde_r, schema,
+            cfg.arm_speed,
+            cfg.arm_acceleration,
+            cfg.arm_absolute_mode,
+        )
+        gripper_action_mode = ACTION_MODES[cfg.gripper_action_mode](
+            cfg.host, cfg.gripper_port, cfg.gripper_force,
+            cfg.gripper_speed, cfg.gripper_absolute_mode
+        )
         return cls(
             interfaces,
-            ACTION_MODES[arm_action_mode](rtde_c, rtde_r, schema, **arm_kwargs),
-            ACTION_MODES[gripper_action_mode](
-                cfg.host, cfg.gripper_port, cfg.force,
-                cfg.speed, **gripper_kwargs),
-            RealSense(width=cfg.width, height=cfg.height)
+            arm_action_mode,
+            gripper_action_mode,
+            RealSense(cfg.realsense_width, cfg.realsense_height),
+            Kinect(),
         )
 
     def close(self):

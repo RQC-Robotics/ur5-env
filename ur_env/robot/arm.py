@@ -21,7 +21,7 @@ class ArmObservation:
         self._rtde_r = rtde_r
         self._schema = schema
 
-    def __call__(self):
+    def __call__(self) -> base.Observation:
         """Get all observations specified in the schema one by one."""
         obs = OrderedDict()
         for key in self._schema.keys():
@@ -30,7 +30,7 @@ class ArmObservation:
         return obs
 
     @property
-    def observation_space(self):
+    def observation_space(self) -> base.ObservationSpecs:
         obs_space = OrderedDict()
         _types = dict(int=int)
         # Limits should also be obtained from the schema.
@@ -52,6 +52,8 @@ class ArmActionMode(base.Node):
             rtde_c: RTDEControl,
             rtde_r: RTDEReceiveInterface,
             schema: OrderedDict,
+            speed: float = .25,
+            acceleration: float = 1.2,
             absolute_mode: bool = True,
     ):
         """Schema specifies desirable observables: name, shape, dtype.
@@ -60,25 +62,27 @@ class ArmActionMode(base.Node):
         """
         self._rtde_c = rtde_c
         self._rtde_r = rtde_r
-        self._absolute = absolute_mode
         self._observation = ArmObservation(rtde_r, schema)
+        self._speed = speed
+        self._acceleration = acceleration
+        self._absolute = absolute_mode
         self._update_state()
         self._tcp_estim = None
 
-    def step(self, action: base.NDArray):
+    def step(self, action: base.Action):
         self._pre_action(action)
         self._act_fn(action)
         self._post_action()
 
-    def get_observation(self) -> base.NDArrayDict:
+    def get_observation(self) -> base.Observation:
         return self._observation()
 
     @abc.abstractmethod
-    def _estimate_next_pose(self, action: base.NDArray) -> base.NDArray:
+    def _estimate_next_pose(self, action: base.Action) -> base.Action:
         """Next pose can be used to predict if safety limits
         would not be violated."""
 
-    def _pre_action(self, action: base.NDArray):
+    def _pre_action(self, action: base.Action):
         """Checks if an action can be performed safely."""
         self._update_state()
         self._tcp_estim = self._estimate_next_pose(action)
@@ -93,18 +97,18 @@ class ArmActionMode(base.Node):
                 "Safety mode is not in normal or reduced mode.")
 
         self._update_state()
-        if not np.allclose(self._tcp_estim, self._tcp_pose, rtol=.2):
+        if not np.allclose(self._tcp_estim, self._tcp_pose, atol=.1):
             raise base.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
                 f"{self._tcp_estim} and {self._tcp_pose}."
             )
 
     @abc.abstractmethod
-    def _act_fn(self, action: base.NDArray) -> bool:
+    def _act_fn(self, action: base.Action) -> bool:
         """Function of RTDEControlInterface to call."""
 
     @property
-    def observation_space(self) -> base.SpecsDict:
+    def observation_space(self) -> base.ObservationSpecs:
         return self._observation.observation_space
 
     def _update_state(self):
@@ -124,12 +128,16 @@ class TCPPosition(ArmActionMode):
     def _estimate_next_pose(self, action):
         return action if self._absolute else action + self._tcp_pose
 
-    def _act_fn(self, action: base.NDArray) -> bool:
+    def _act_fn(self, action: base.Action) -> bool:
         pose = self._estimate_next_pose(action)
-        return self._rtde_c.moveL(list(pose))
+        return self._rtde_c.moveL(
+            pose=list(pose),
+            speed=self._speed,
+            acceleration=self._acceleration
+        )
 
     @property
-    def action_space(self) -> base.Specs:
+    def action_space(self) -> base.ActionSpec:
         return gym.spaces.Box(
             low=np.array(3 * [-np.inf] + 3 * [-2*np.pi], dtype=np.float32),
             high=np.array(3 * [np.inf] + 3 * [2*np.pi], dtype=np.float32),

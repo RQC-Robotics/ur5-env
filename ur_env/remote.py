@@ -1,6 +1,6 @@
 """Client-server connection with a robot."""
 from typing import Tuple, Optional, Any
-
+from enum import IntEnum
 import abc
 import time
 import struct
@@ -9,13 +9,12 @@ import pickle
 import logging
 
 Address = Tuple[str, int]
-DEFAULT_TIMEOUT = 60
-PKG_SIZE = 1 << 16
+PKG_SIZE = 8192
 
 _log = logging.getLogger(__name__)
 
 
-class Command:
+class Command(IntEnum):
     RESET = 0
     ACT_SPACE = 1
     OBS_SPACE = 2
@@ -66,7 +65,6 @@ class RemoteEnvClient(RemoteBase):
 
         try:
             self._sock = socket.socket()
-            # self._sock.settimeout(DEFAULT_TIMEOUT)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
@@ -159,7 +157,7 @@ class RemoteEnvServer(RemoteBase):
             raise ValueError(msg)
 
         if cmd == Command.CLOSE:
-            return
+            return 0
         return self._send(data)
 
     def step(self):

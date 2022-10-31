@@ -3,15 +3,14 @@ import abc
 from typing import NamedTuple, Dict, Any, MutableMapping, Union, Tuple
 import time
 
-import gym.spaces
 import numpy as np
-import numpy.typing as npt
+from gym.spaces import Box
 
 
-NDArray = npt.NDArray
-Specs = gym.Space
-SpecsDict = MutableMapping[str, Specs]
-NDArrayDict = MutableMapping[str, NDArray]
+Action = np.ndarray
+ActionSpec = Box
+Observation = MutableMapping[str, np.ndarray]
+ObservationSpecs = MutableMapping[str, Box]
 
 Extra = Dict[str, Any]
 
@@ -23,21 +22,21 @@ class Node(abc.ABC):
     """
     _name = None
 
-    def step(self, action: NDArray):
+    def step(self, action: Action):
         """Performs action and update state."""
 
     @abc.abstractmethod
-    def get_observation(self) -> NDArrayDict:
+    def get_observation(self) -> Observation:
         """Returns an observation from the node."""
 
     @property
-    def action_space(self) -> Union[Specs, SpecsDict]:
+    def action_space(self) -> ActionSpec:
         """gym-like action space mapping."""
         return {}
 
     @property
     @abc.abstractmethod
-    def observation_space(self) -> SpecsDict:
+    def observation_space(self) -> ObservationSpecs:
         """gym-like observation space mapping."""
 
     @property
@@ -52,7 +51,7 @@ class Timestep(NamedTuple):
 
     Extra may hold additional info required for solving task.
     """
-    observation: NDArrayDict
+    observation: Observation
     reward: float
     done: bool
     extra: Extra
@@ -76,7 +75,7 @@ class Task(abc.ABC):
          Returns success flag and optional information.
          """
 
-    def get_observation(self, scene) -> NDArrayDict:
+    def get_observation(self, scene) -> Observation:
         """Returns observation from the environment."""
         return scene.get_observation()
 
@@ -92,11 +91,11 @@ class Task(abc.ABC):
         """Optional information required to solve the task."""
         return {}
 
-    def action_space(self, scene) -> SpecsDict:
+    def action_space(self, scene) -> ActionSpec:
         """Action space."""
         return scene.action_space
 
-    def observation_space(self, scene) -> SpecsDict:
+    def observation_space(self, scene) -> ObservationSpecs:
         """Observation space."""
         return scene.observation_space
 
@@ -122,7 +121,7 @@ class Task(abc.ABC):
             dashboard.unlockProtectiveStop()
             rtde_c.reuploadScript()
 
-    def preprocess_action(self, action, scene):
+    def preprocess_action(self, action: Any, scene) -> Action:
         """Use to prepare compatible with the scene action."""
         return action
 
@@ -140,10 +139,10 @@ class Environment:
         self._task = task
 
         self._time_limit = time_limit
-        self._step_count = 0
+        self._step_count = None
 
         self._max_violations = max_violations_num
-        self._violations = 0
+        self._violations = None
 
         self._prev_obs = None
 

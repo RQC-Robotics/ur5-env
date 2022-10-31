@@ -19,28 +19,28 @@ class RealSense(base.Node):
         self._height = height
         self._build()
 
-    def get_observation(self) -> base.NDArrayDict:
+    def get_observation(self) -> base.Observation:
         frames = [self.capture_frameset() for _ in range(8)]
         rgb, depth, points = self._postprocess(frames)
-        verts = np.asanyarray(points.get_vertices()).view(np.float32) \
+        verts = np.asanyarray(points.get_vertices()) \
             .reshape(self._depth_height, self._depth_width, 3)
         return {
-            "depth": np.asanyarray(depth.get_data(), dtype=np.float32),
-            "image": np.asanyarray(rgb.get_data(), dtype=np.uint8),
-            "point_cloud": verts
+            "depth": self._depth_scale * np.asanyarray(depth.get_data()),
+            "image": np.asanyarray(rgb.get_data()),
+            "point_cloud": self._depth_scale * verts
 
         }
 
     @property
-    def observation_space(self) -> base.SpecsDict:
+    def observation_space(self) -> base.ObservationSpecs:
         rgb_shape = (self._height, self._width)
         depth_shape = (self._depth_height, self._depth_width)
         return {
-            'depth': gym.spaces.Box(
+            "depth": gym.spaces.Box(
                 0, np.inf, shape=depth_shape, dtype=np.float32),
-            'image': gym.spaces.Box(
+            "image": gym.spaces.Box(
                 0, 255, shape=rgb_shape+(3,), dtype=np.uint8),
-            'point_cloud': gym.spaces.Box(
+            "point_cloud": gym.spaces.Box(
                 0, np.inf, shape=depth_shape+(3,), dtype=np.float32)
         }
 
@@ -82,6 +82,9 @@ class RealSense(base.Node):
             rs.stream.color, width=self._width, height=self._height)
 
         self._profile = self._pipeline.start(self._config)
+        depth_sensor = self._profile.get_device().first_depth_sensor()
+        self._depth_scale = np.float32(depth_sensor.get_depth_scale())
+
         # Set High Accuracy preset.
         #depth_sensor = self._profile.get_device().first_depth_sensor()
         #depth_sensor.set_option(rs.option.visual_preset, 3)

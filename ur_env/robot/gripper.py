@@ -38,27 +38,25 @@ class GripperActionMode(base.Node, abc.ABC):
         self._obj_status = None
         self._pos = self._min_position
 
-    def get_observation(self):
-        is_object_detected = self.object_status
+    def get_observation(self) -> base.Observation:
         normed_pos = (self._pos - self._min_position) / self._delta
 
         return {
             "is_closed": np.float32(self._pos > self._min_position),
-            "pose": np.float32(normed_pos),
-            "object_detected": np.float32(is_object_detected),
+            "pos": np.float32(normed_pos),
+            "object_detected": np.float32(self.object_status),
         }
 
     @property
-    def observation_space(self):
+    def observation_space(self) -> base.ObservationSpecs:
         return {
-            "is_closed": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
-            "pose": gym.spaces.Box(low=0, high=1, shape=(), dtype=float),
-            "object_detected": gym.spaces.Box(
-                low=0, high=1, shape=(), dtype=float)
+            "is_closed":
+                gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32),
+            "pos":
+                gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32),
+            "object_detected":
+                gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32)
         }
-
-    def __getattr__(self, name):
-        return getattr(self._gripper, name)
 
     @property
     def max_position(self):
@@ -75,24 +73,27 @@ class GripperActionMode(base.Node, abc.ABC):
             RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
         )
 
+    def __getattr__(self, name):
+        return getattr(self._gripper, name)
+
 
 class Discrete(GripperActionMode):
     """Opens or closes gripper."""
 
-    def step(self, action: base.NDArray):
+    def step(self, action: base.Action):
         self._pos, self._obj_status = self.move(
             self._max_position if action > 0.5 else self._min_position
         )
 
     @property
-    def action_space(self) -> base.Specs:
-        return gym.spaces.Box(low=0., high=1., shape=(), dtype=float)
+    def action_space(self) -> base.ActionSpec:
+        return gym.spaces.Box(low=0., high=1., shape=(), dtype=np.float32)
 
 
 class Continuous(GripperActionMode):
     """Fine-grained control of a gripper."""
 
-    def step(self, action: base.NDArray):
+    def step(self, action: base.Action):
         action = int(self._delta * (action + 1.) / 2 + self._min_position)
         if self._absolute:
             pos = action
@@ -102,5 +103,5 @@ class Continuous(GripperActionMode):
         self._pos, self._obj_status = self.move(pos)
 
     @property
-    def action_space(self) -> base.Specs:
-        return gym.spaces.Box(low=-1., high=1., shape=(), dtype=float)
+    def action_space(self) -> base.ActionSpec:
+        return gym.spaces.Box(low=-1., high=1., shape=(), dtype=np.float32)
