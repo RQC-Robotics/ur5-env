@@ -106,7 +106,7 @@ class Scene:
     ) -> "Scene":
         """Creates scene from the config."""
         schema, variables = load_schema(cfg.obs_schema)
-        variables = None
+        variables = None  # Include variables that are needed for status checks.
 
         interfaces = robot_interfaces_factory(
             cfg.host,

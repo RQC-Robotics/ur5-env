@@ -22,7 +22,7 @@ class RealSense(base.Node):
     def get_observation(self) -> base.Observation:
         frames = [self.capture_frameset() for _ in range(8)]
         rgb, depth, points = self._postprocess(frames)
-        verts = np.asanyarray(points.get_vertices()) \
+        verts = np.asanyarray(points.get_vertices()).view(np.float32) \
             .reshape(self._depth_height, self._depth_width, 3)
         return {
             "depth": self._depth_scale * np.asanyarray(depth.get_data()),

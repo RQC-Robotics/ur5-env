@@ -71,16 +71,16 @@ def _default_config() -> k4a_config.Config:
 
 def _get_color_shape(cr: k4a_config.ColorResolution) -> Tuple[int, int]:
     if cr == _CR.RES_720P:
-        return 1280, 720
+        return 720, 1280
     elif cr == _CR.RES_1080P:
-        return 1920, 1080
+        return 1080, 1920
     elif cr == _CR.RES_1440P:
-        return 2560, 1440
+        return 1440, 2560
     elif cr == _CR.RES_1536P:
-        return 2048, 1536
+        return 1536, 2048
     elif cr == _CR.RES_2160P:
-        return 3840, 2160
+        return 2160, 3840
     elif cr == _CR.RES_3072P:
-        return 4096, 3072
+        return 3072, 4096
 
     raise NotImplementedError
