@@ -42,6 +42,7 @@ class Kinect(base.Node):
                 self._depth_scale * capture.transformed_depth_point_cloud
         }
 
+    @property
     def observation_space(self) -> base.ObservationSpecs:
         color_shape = _get_color_shape(self._config.color_resolution)
         return {

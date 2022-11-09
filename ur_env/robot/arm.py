@@ -66,8 +66,9 @@ class ArmActionMode(base.Node):
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
-        self._update_state()
-        self._tcp_estim = None
+        # An action should update at least one of following estimations.
+        self._estim_tcp = None
+        self._estim_q = None
 
     def step(self, action: base.Action):
         self._pre_action(action)
@@ -78,17 +79,27 @@ class ArmActionMode(base.Node):
         return self._observation()
 
     @abc.abstractmethod
-    def _estimate_next_pose(self, action: base.Action) -> base.Action:
+    def _estimate_next(self, action: base.Action):
         """Next pose can be used to predict if safety limits
-        would not be violated."""
+        would not be violated.
+        One must update at least one of q/tcp estimations.
+        """
 
     def _pre_action(self, action: base.Action):
         """Checks if an action can be performed safely."""
         self._update_state()
-        self._tcp_estim = self._estimate_next_pose(action)
-        if not self._rtde_c.isPoseWithinSafetyLimits(list(self._tcp_estim)):
-            raise base.SafetyLimitsViolation(
-                f"Safety limits violation: {self._tcp_estim}")
+        self._estimate_next(action)
+
+        if self._estim_tcp is not None:
+            if not self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_tcp)):
+                raise base.SafetyLimitsViolation(
+                    f"Safety limits violation: {self._estim_tcp}")
+        elif self._estim_q is not None:
+            if not self._rtde_c.isJointsWithinSafetyLimits(list(self._estim_q)):
+                raise base.SafetyLimitsViolation(
+                    f"Safety limits violation: {self._estim_tcp}")
+        else:
+            raise RuntimeError("At least one estimation must be done.")
 
     def _post_action(self):
         """Checks if a resulting pose is consistent with an estimated."""
@@ -97,10 +108,22 @@ class ArmActionMode(base.Node):
                 "Safety mode is not in normal or reduced mode.")
 
         self._update_state()
-        if not np.allclose(self._tcp_estim, self._tcp_pose, atol=.1):
+        if (
+                self._estim_tcp is not None and
+                not np.allclose(self._estim_tcp, self._actual_tcp, atol=.1)
+        ):
             raise base.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
-                f"{self._tcp_estim} and {self._tcp_pose}."
+                f"{self._estim_tcp} and {self._actual_tcp}."
+            )
+
+        if (
+            self._estim_q is not None and
+            not np.allclose(self._estim_q, self._actual_q, atol=.1)
+        ):
+            raise base.PoseEstimationError(
+                f"Estimated and Actual pose discrepancy:"
+                f"{self._estim_q} and {self._actual_q}"
             )
 
     @abc.abstractmethod
@@ -115,8 +138,8 @@ class ArmActionMode(base.Node):
         """Action command or next pose estimation
          may require knowledge of the current state.
         """
-        self._tcp_pose = np.asarray(self._rtde_r.getActualTCPPose())
-        self._joints_pos = np.asarray(self._rtde_r.getActualQ())
+        self._actual_tcp = np.asarray(self._rtde_r.getActualTCPPose())
+        self._actual_q = np.asarray(self._rtde_r.getActualQ())
 
 
 class TCPPosition(ArmActionMode):
@@ -125,13 +148,16 @@ class TCPPosition(ArmActionMode):
     Absolute mode is specifying if control input is a relative difference or
     a final TCPPose.
     """
-    def _estimate_next_pose(self, action):
-        return action if self._absolute else action + self._tcp_pose
+
+    def _estimate_next(self, action: base.Action):
+        if self._absolute:
+            self._estim_tcp = action
+        else:
+            self._estim_tcp = action + self._actual_tcp
 
     def _act_fn(self, action: base.Action) -> bool:
-        pose = self._estimate_next_pose(action)
         return self._rtde_c.moveL(
-            pose=list(pose),
+            pose=list(self._estim_tcp),
             speed=self._speed,
             acceleration=self._acceleration
         )
@@ -143,6 +169,37 @@ class TCPPosition(ArmActionMode):
             high=np.array(3 * [np.inf] + 3 * [2*np.pi], dtype=np.float32),
             shape=(6,),
             dtype=np.float32
+        )
+
+
+class JointsPosition(ArmActionMode):
+    """Act in joints space f64 q[6] by executing moveJ."""
+
+    def _estimate_next(self, action: base.Action):
+        if self._absolute:
+            self._estim_q = action
+        else:
+
+            self._estim_q = np.clip(action + self._actual_q,
+                                    a_min=-2*np.pi,
+                                    a_max=2*np.pi
+                                    )
+
+    def _act_fn(self, action: base.Action) -> bool:
+        return self._rtde_c.moveJ(
+            q=list(self._estim_q),
+            speed=self._speed,
+            acceleration=self._acceleration
+        )
+
+    @property
+    def action_space(self) -> base.ActionSpec:
+        lim = np.full((6,), 2 * np.pi)
+        return gym.spaces.Box(
+            low=-lim,
+            high=lim,
+            shape=lim.shape,
+            dtyoe=lim.dtype
         )
 
 
