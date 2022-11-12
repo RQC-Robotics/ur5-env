@@ -5,6 +5,7 @@ import pathlib
 import functools
 from collections import OrderedDict
 
+import numpy as np
 from ruamel import yaml
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
@@ -71,6 +72,10 @@ class Scene:
             node_action = action.get(node.name)
             if node_action is not None:
                 node.step(node_action)
+
+    def initialize_episode(self, random_state: np.random.Generator):
+        for node in self._nodes:
+            node.initialize_episode(random_state)
 
     def get_observation(self) -> base.Observation:
         """Gathers all observations."""

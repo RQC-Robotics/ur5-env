@@ -25,6 +25,9 @@ class Node(abc.ABC):
     def step(self, action: Action):
         """Performs action and update state."""
 
+    def initialize_episode(self, random_state: np.random.Generator):
+        """Resets node statistics on the new episode."""
+
     @abc.abstractmethod
     def get_observation(self) -> Observation:
         """Returns an observation from the node."""
@@ -64,9 +67,9 @@ class Task(abc.ABC):
         if isinstance(rng, int):
             self._rng = np.random.default_rng(rng)
 
-    @abc.abstractmethod
     def initialize_episode(self, scene) -> Extra:
         """Reset task and prepare for new interactions."""
+        scene.initialize_episode()
 
     @abc.abstractmethod
     def get_success(self, scene) -> Tuple[bool, Any]:

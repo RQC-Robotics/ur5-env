@@ -36,26 +36,36 @@ class GripperActionMode(base.Node, abc.ABC):
         self._delta = float(self._max_position - self._min_position)
         self._gripper = gripper
         self._obj_status = None
-        self._pos = self._min_position
+        self._pos = None
+
+    def initialize_episode(self, random_state: np.random.Generator):
+        del random_state
+        self._obj_status = RobotiqGripper.ObjectStatus.AT_DEST
+        self._pos = self._gripper.get_current_position()
 
     def get_observation(self) -> base.Observation:
         normed_pos = (self._pos - self._min_position) / self._delta
 
-        return {
-            "is_closed": np.float32(self._pos > self._min_position),
-            "pos": np.float32(normed_pos),
-            "object_detected": np.float32(self.object_status),
+        def as_np_obs(arg):
+            arg = np.float32(arg)
+            return np.atleast_1d(arg)
+
+        obs = {
+            "is_closed": self._gripper.is_closed(),
+            "pos": normed_pos,
+            "object_detected": self.object_detected,
         }
+        return {k: as_np_obs(v) for k, v in obs.items()}
 
     @property
     def observation_space(self) -> base.ObservationSpecs:
         return {
             "is_closed":
-                gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32),
+                gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
             "pos":
-                gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32),
+                gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
             "object_detected":
-                gym.spaces.Box(low=0, high=1, shape=(), dtype=np.float32)
+                gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
         }
 
     @property
@@ -67,7 +77,7 @@ class GripperActionMode(base.Node, abc.ABC):
         return self._min_position
 
     @property
-    def object_status(self):
+    def object_detected(self):
         return self._obj_status in (
             RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
             RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT

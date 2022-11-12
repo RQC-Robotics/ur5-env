@@ -9,6 +9,8 @@ from rtde_control import RTDEControlInterface as RTDEControl
 
 from ur_env import base
 
+_JOINT_LIMITS = np.float32([2*np.pi, 2*np.pi, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
+
 
 class ArmObservation:
     """Polls receiver multiple times to get all the observations
@@ -66,7 +68,7 @@ class ArmActionMode(base.Node):
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
-        # An action should update at least one of following estimations.
+        # An action should update at least one of the following estimations.
         self._estim_tcp = None
         self._estim_q = None
 
@@ -74,6 +76,10 @@ class ArmActionMode(base.Node):
         self._pre_action(action)
         self._act_fn(action)
         self._post_action()
+
+    def initialize_episode(self, random_state: np.random.Generator):
+        self._estim_tcp = None
+        self._estim_q = None
 
     def get_observation(self) -> base.Observation:
         return self._observation()
@@ -93,11 +99,11 @@ class ArmActionMode(base.Node):
         if self._estim_tcp is not None:
             if not self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_tcp)):
                 raise base.SafetyLimitsViolation(
-                    f"Safety limits violation: {self._estim_tcp}")
+                    f"Pose safety limits violation: {self._estim_tcp}")
         elif self._estim_q is not None:
             if not self._rtde_c.isJointsWithinSafetyLimits(list(self._estim_q)):
                 raise base.SafetyLimitsViolation(
-                    f"Safety limits violation: {self._estim_tcp}")
+                    f"Joints safety limits violation: {self._estim_q}")
         else:
             raise RuntimeError("At least one estimation must be done.")
 
@@ -105,7 +111,7 @@ class ArmActionMode(base.Node):
         """Checks if a resulting pose is consistent with an estimated."""
         if self._rtde_r.getSafetyMode() > 1:
             raise base.ProtectiveStop(
-                "Safety mode is not in normal or reduced mode.")
+                "Safety mode is not in a normal or reduced mode.")
 
         self._update_state()
         if (
@@ -122,7 +128,7 @@ class ArmActionMode(base.Node):
             not np.allclose(self._estim_q, self._actual_q, atol=.1)
         ):
             raise base.PoseEstimationError(
-                f"Estimated and Actual pose discrepancy:"
+                f"Estimated and Actual Q discrepancy:"
                 f"{self._estim_q} and {self._actual_q}"
             )
 
@@ -181,8 +187,8 @@ class JointsPosition(ArmActionMode):
         else:
 
             self._estim_q = np.clip(action + self._actual_q,
-                                    a_min=-2*np.pi,
-                                    a_max=2*np.pi
+                                    a_min=-_JOINT_LIMITS,
+                                    a_max=_JOINT_LIMITS
                                     )
 
     def _act_fn(self, action: base.Action) -> bool:
@@ -194,12 +200,12 @@ class JointsPosition(ArmActionMode):
 
     @property
     def action_space(self) -> base.ActionSpec:
-        lim = np.full((6,), 2 * np.pi)
+        lim = _JOINT_LIMITS
         return gym.spaces.Box(
             low=-lim,
             high=lim,
             shape=lim.shape,
-            dtyoe=lim.dtype
+            dtype=lim.dtype
         )
 
 
