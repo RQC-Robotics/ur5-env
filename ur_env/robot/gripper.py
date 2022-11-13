@@ -27,9 +27,8 @@ class GripperActionMode(base.Node, abc.ABC):
         def rescale(x):
             return int(255 * x / 100.)
 
-        self.move = lambda pos: gripper.move_and_wait_for_pos(
-            pos, rescale(speed), rescale(force)
-        )
+        self._speed = rescale(speed)
+        self._force = rescale(force)
         self._absolute = absolute_mode
         self._max_position = gripper.get_max_position()
         self._min_position = gripper.get_min_position()
@@ -37,6 +36,12 @@ class GripperActionMode(base.Node, abc.ABC):
         self._gripper = gripper
         self._obj_status = None
         self._pos = None
+
+    def move(self, pos):
+        response = self._gripper.move_and_wait_for_pos(
+            pos, self._speed, self._force)
+        self._pos, self._obj_status = response
+        return response
 
     def initialize_episode(self, random_state: np.random.Generator):
         del random_state
@@ -91,7 +96,7 @@ class Discrete(GripperActionMode):
     """Opens or closes gripper."""
 
     def step(self, action: base.Action):
-        self._pos, self._obj_status = self.move(
+        self.move(
             self._max_position if action > 0.5 else self._min_position
         )
 
@@ -110,7 +115,7 @@ class Continuous(GripperActionMode):
         else:
             pos = self._pos + action
             pos = np.clip(pos, self._min_position, self._max_position)
-        self._pos, self._obj_status = self.move(pos)
+        self.move(pos)
 
     @property
     def action_space(self) -> base.ActionSpec:

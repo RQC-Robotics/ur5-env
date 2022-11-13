@@ -30,8 +30,7 @@ class Kinect(base.Node):
     def get_observation(self) -> base.Observation:
         """
         Captures observation from the camera.
-        Default color_format is BGRA32, which may require transformation to RGB
-            (tip: use [:, :, 2::-1]).
+        Default color_format is BGRA32, which may require transformation to RGB.
         Depth map and point cloud are transformed to match color_format shape.
         """
         capture = self._k4a.get_capture()
