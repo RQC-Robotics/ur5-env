@@ -69,7 +69,8 @@ class Task(abc.ABC):
 
     def initialize_episode(self, scene) -> Extra:
         """Reset task and prepare for new interactions."""
-        scene.initialize_episode()
+        scene.initialize_episode(self._rng)
+        return {}
 
     @abc.abstractmethod
     def get_success(self, scene) -> Tuple[bool, Any]:
@@ -102,7 +103,7 @@ class Task(abc.ABC):
         """Observation space."""
         return scene.observation_space
 
-    def before_step(self, action: Any, scene):
+    def before_step(self, action: Any, scene) -> Action:
         """Pre action step."""
         # Reconnection problem.
         # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
