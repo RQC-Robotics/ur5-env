@@ -4,3 +4,4 @@ ur_rtde
 pyrealsense2
 ruamel.YAML
 pyk4a
+digit-interface
