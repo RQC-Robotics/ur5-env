@@ -65,8 +65,8 @@ class RealSense(base.Node):
         return depth, frameset.get_color_frame()
 
     def _build(self):
-        """Most of the following are not required at all
-        but still present here to explore and remind of camera possibilities.
+        """Most of the following is not required at all
+        but still presents here to explore and remind of camera possibilities.
         """
         self._pipeline = rs.pipeline()
         self._config = rs.config()
@@ -94,6 +94,9 @@ class RealSense(base.Node):
             depth, rgb = self.capture_frameset()
         self._depth_height, self._depth_width =\
             np.asanyarray(depth.get_data()).shape
+
+    def close(self):
+        self._pipeline.stop()
 
     @property
     def pipeline(self):

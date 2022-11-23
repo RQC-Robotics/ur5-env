@@ -6,7 +6,6 @@ from pyk4a import PyK4A, config as k4a_config
 
 from ur_env import base
 
-
 _CR = k4a_config.ColorResolution
 
 
@@ -29,8 +28,9 @@ class Kinect(base.Node):
 
     def get_observation(self) -> base.Observation:
         """
-        Captures observation from the camera.
+        Captures an observation from the camera.
         Default color_format is BGRA32, which may require transformation to RGB.
+            Conversion can be done with a [:, :, 2::-1] slice.
         Depth map and point cloud are transformed to match color_format shape.
         """
         capture = self._k4a.get_capture()
@@ -50,6 +50,9 @@ class Kinect(base.Node):
             "point_cloud": spaces.Box(0, np.inf, color_shape + (3,), np.float32)
         }
 
+    def close(self):
+        self._k4a.stop()
+
     @property
     def config(self):
         return self._config
@@ -57,7 +60,7 @@ class Kinect(base.Node):
 
 def _default_config() -> k4a_config.Config:
     return k4a_config.Config(
-                color_resolution=k4a_config.ColorResolution.RES_1080P,
+                color_resolution=k4a_config.ColorResolution.RES_720P,
                 color_format=k4a_config.ImageFormat.COLOR_BGRA32,
                 depth_mode=k4a_config.DepthMode.NFOV_UNBINNED,
                 camera_fps=k4a_config.FPS.FPS_5,
@@ -69,7 +72,7 @@ def _default_config() -> k4a_config.Config:
             )
 
 
-def _get_color_shape(cr: k4a_config.ColorResolution) -> Tuple[int, int]:
+def _get_color_shape(cr: _CR) -> Tuple[int, int]:
     if cr == _CR.RES_720P:
         return 720, 1280
     elif cr == _CR.RES_1080P:
@@ -82,5 +85,4 @@ def _get_color_shape(cr: k4a_config.ColorResolution) -> Tuple[int, int]:
         return 2160, 3840
     elif cr == _CR.RES_3072P:
         return 3072, 4096
-
-    raise NotImplementedError
+    raise ValueError(cr)

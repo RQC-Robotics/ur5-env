@@ -2,7 +2,6 @@ from typing import Optional, List, NamedTuple, MutableMapping, Tuple, Dict, Any
 import re
 import time
 import pathlib
-import functools
 from collections import OrderedDict
 
 import numpy as np
@@ -63,6 +62,7 @@ class Scene:
         self._interfaces = robot_interfaces
         self._nodes = nodes
         _check_for_name_collision(self._nodes)
+        self._node_names = tuple(map(base.Node.name, self._nodes))
 
     def step(self, action: Dict[str, base.Action]):
         """Scene can be updated partially
@@ -86,7 +86,7 @@ class Scene:
             observations.update(obs)
         return observations
 
-    @functools.cached_property
+    @property
     def observation_space(self) -> base.ObservationSpecs:
         """Gathers all observation specs."""
         obs_specs = OrderedDict()
@@ -95,7 +95,7 @@ class Scene:
             obs_specs.update(_name_mangling(node.name, spec))
         return obs_specs
 
-    @functools.cached_property
+    @property
     def action_space(self) -> Dict[str, base.ActionSpec]:
         """Gathers all action specs."""
         act_specs = OrderedDict()
@@ -140,18 +140,22 @@ class Scene:
 
     def close(self):
         """Close all connections, shutdown robot and camera."""
+        for node in self.nodes:
+            node.close()
         rtde_c, rtde_r, dashboard = self._interfaces
         dashboard.stop()
         rtde_r.disconnect()
         rtde_c.disconnect()
         dashboard.disconnect()
-        self.realsense.pipeline.stop()
 
-    # While making things easier it can cause troubles.
-    def __getattr__(self, name) -> base.Node:
+    def __getattr__(self, name: str) -> base.Node:
         """Allows to obtain node by its name assuming node name is unique."""
-        node = filter(lambda n: n.name == name, self._nodes)
-        return next(node)
+        # While making things easier it can cause troubles.
+        try:
+            idx = self._node_names.index(name)
+        except ValueError as exp:
+            raise AttributeError("Scene has no attribute " + name) from exp
+        return self._nodes[idx]
 
     @property
     def rtde_control(self) -> RTDEControlInterface:

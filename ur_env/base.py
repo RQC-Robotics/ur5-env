@@ -37,6 +37,9 @@ class Node(abc.ABC):
         """gym-like action space mapping."""
         return {}
 
+    def close(self) -> None:
+        """Finalize work: terminate connection, close opened stream, etc."""
+
     @property
     @abc.abstractmethod
     def observation_space(self) -> ObservationSpecs:
