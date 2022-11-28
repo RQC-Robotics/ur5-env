@@ -1,25 +1,27 @@
-from typing import List
+from typing import List, Optional, Tuple
 
-import gym.spaces
 import numpy as np
+from dm_env import specs
 import pyrealsense2 as rs
 
-from ur_env import base
+from ur_env import types
+from ur_env.scene.nodes import base
 
 
 class RealSense(base.Node):
     """Intel RealSense D455."""
-    _name = "realsense"
 
     def __init__(self,
                  width: int = 848,
                  height: int = 480,
-                 ):
+                 name: Optional[str] = None,
+                 ) -> None:
+        super().__init__(name)
         self._width = width
         self._height = height
         self._build()
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> types.Observation:
         frames = [self.capture_frameset() for _ in range(8)]
         rgb, depth, points = self._postprocess(frames)
         verts = np.asanyarray(points.get_vertices()).view(np.float32) \
@@ -31,23 +33,24 @@ class RealSense(base.Node):
 
         }
 
-    @property
-    def observation_space(self) -> base.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpecs:
         rgb_shape = (self._height, self._width)
         depth_shape = (self._depth_height, self._depth_width)
         return {
-            "depth": gym.spaces.Box(
-                0, np.inf, shape=depth_shape, dtype=np.float32),
-            "image": gym.spaces.Box(
-                0, 255, shape=rgb_shape+(3,), dtype=np.uint8),
-            "point_cloud": gym.spaces.Box(
-                0, np.inf, shape=depth_shape+(3,), dtype=np.float32)
+            "depth": specs.BoundedArray(
+                depth_shape, np.float32, 0, np.inf),
+            "image": specs.BoundedArray(
+                rgb_shape+(3,), np.uint8, 0, 255),
+            "point_cloud": specs.BoundedArray(
+                depth_shape+(3,), np.float32, 0, np.inf)
         }
 
-    def _postprocess(self, frames: List[rs.frame]):
+    def _postprocess(self,
+                     frames: List[rs.frame]
+                     ) -> Tuple[rs.frame, rs.depth_frame, rs.pointcloud]:
         """Process a sequence of frames.
 
-        Temporal processing is only useful for static scene.
+        Temporal processing is only useful for a static scene.
         """
         for depth, rgb in frames:
             depth_frame = self._temporal.process(depth)
@@ -55,7 +58,7 @@ class RealSense(base.Node):
         points = pcd.calculate(depth_frame)
         return rgb, depth_frame, points
 
-    def capture_frameset(self):
+    def capture_frameset(self) -> Tuple[rs.depth_frame, rs.frame]:
         """Obtains single frameset."""
         frameset = self._pipeline.wait_for_frames()
         frameset = self._align.process(frameset)
@@ -64,7 +67,7 @@ class RealSense(base.Node):
         depth = self._hole_filling.process(depth)
         return depth, frameset.get_color_frame()
 
-    def _build(self):
+    def _build(self) -> None:
         """Most of the following is not required at all
         but still presents here to explore and remind of camera possibilities.
         """
@@ -89,23 +92,23 @@ class RealSense(base.Node):
         #depth_sensor = self._profile.get_device().first_depth_sensor()
         #depth_sensor.set_option(rs.option.visual_preset, 3)
 
-        # Wait for auto calibration and update shapes after processing.
+        # Wait for an auto calibration and update shapes after processing.
         for _ in range(5):
             depth, rgb = self.capture_frameset()
         self._depth_height, self._depth_width =\
             np.asanyarray(depth.get_data()).shape
 
-    def close(self):
+    def close(self) -> None:
         self._pipeline.stop()
 
     @property
-    def pipeline(self):
+    def pipeline(self) -> rs.pipeline:
         return self._pipeline
 
     @property
-    def config(self):
+    def config(self) -> rs.config:
         return self._config
 
     @property
-    def profile(self):
+    def profile(self) -> rs.pipeline_profile:
         return self._profile

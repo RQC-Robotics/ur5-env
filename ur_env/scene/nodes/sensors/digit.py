@@ -1,15 +1,15 @@
 from typing import Optional, Literal
 
 import numpy as np
-from gym import spaces
+from dm_env import specs
 from digit_interface import Digit as _Digit
 
-from ur_env import base
+from ur_env import types
+from ur_env.scene.nodes import base
 
 
 class Digit(base.Node):
     """Digit sensor."""
-    _name = "digit"
 
     def __init__(self,
                  serial: str,
@@ -17,14 +17,12 @@ class Digit(base.Node):
                  fps: int = 60,
                  intensity: int = _Digit.LIGHTING_MAX,
                  name: Optional[str] = None,
-                 ):
+                 ) -> None:
         """
         Serial can be found with digit_interface.DigitHandler.
         FPS option vary per resolution: 30 or 15 for VGA; 60 or 30 for QVGA.
         """
-        if name is not None:
-            self._name += name
-
+        super().__init__(name=name)
         res = _Digit.STREAMS[resolution].copy()
         default_fps = 30 if resolution == "VGA" else 60
 
@@ -38,9 +36,10 @@ class Digit(base.Node):
 
     def initialize_episode(self, random_state: np.random.Generator):
         """Reference frame can be used to observe difference."""
+        del random_state
         self._reference_frame = self._digit.get_frame().astype(np.float32)
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> types.Observation:
         frame = self._digit.get_frame()
         diff = (frame - self._reference_frame) / 255
         return {
@@ -48,14 +47,13 @@ class Digit(base.Node):
             "sensor_diff": diff,
         }
 
-    @property
-    def observation_space(self) -> base.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpecs:
         res = self._digit.resolution
         shape = (res["width"], res["height"])
         return {
-            "sensor": spaces.Box(0, 255, shape, np.uint8),
-            "sensor_diff": spaces.Box(-1., 1., shape, np.float32)
+            "sensor": specs.BoundedArray(shape, np.uint8, 0, 255),
+            "sensor_diff": specs.BoundedArray(shape, np.float32, -1., 1.)
         }
 
-    def close(self):
+    def close(self) -> None:
         self._digit.disconnect()

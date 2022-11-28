@@ -1,6 +1,6 @@
 """Core robot and gripper controllable nodes."""
-from ur_env.robot.arm import ArmActionMode, TCPPosition, JointsPosition
-from ur_env.robot.gripper import GripperActionMode, Discrete, Continuous
+from ur_env.scene.nodes.robot.arm import TCPPosition, JointsPosition
+from ur_env.scene.nodes.robot.gripper import Discrete, Continuous
 
 ACTION_MODES = dict(
     TCPPosition=TCPPosition,

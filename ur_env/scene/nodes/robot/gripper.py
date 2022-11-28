@@ -1,15 +1,15 @@
-import abc
+from typing import Optional
 
-import gym
 import numpy as np
+from dm_env import specs
 
-from ur_env import base
-from ur_env.third_party.robotiq_gripper import RobotiqGripper
+from ur_env import types
+from ur_env.scene.nodes import base
+from .robotiq_gripper import RobotiqGripper
 
 
-class GripperActionMode(base.Node, abc.ABC):
+class GripperActionMode(base.Node):
     """Robotiq gripper."""
-    _name = "gripper"
 
     def __init__(
             self,
@@ -17,9 +17,11 @@ class GripperActionMode(base.Node, abc.ABC):
             port: int = 63352,
             force: int = 100,
             speed: int = 100,
-            absolute_mode: bool = True
-    ):
-        """Pos, speed and force are constrained in [0, 255]."""
+            absolute_mode: bool = True,
+            name: Optional[str] = None
+    ) -> None:
+        """Pos, speed and force are constrained to [0, 255]."""
+        super().__init__(name)
         gripper = RobotiqGripper()
         gripper.connect(host, port)
         gripper.activate()
@@ -34,6 +36,7 @@ class GripperActionMode(base.Node, abc.ABC):
         self._min_position = gripper.get_min_position()
         self._delta = float(self._max_position - self._min_position)
         self._gripper = gripper
+
         self._obj_status = None
         self._pos = None
 
@@ -48,7 +51,7 @@ class GripperActionMode(base.Node, abc.ABC):
         self._obj_status = RobotiqGripper.ObjectStatus.AT_DEST
         self._pos = self._gripper.get_current_position()
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> types.Observation:
         normed_pos = (self._pos - self._min_position) / self._delta
 
         def as_np_obs(arg):
@@ -62,27 +65,23 @@ class GripperActionMode(base.Node, abc.ABC):
         }
         return {k: as_np_obs(v) for k, v in obs.items()}
 
-    @property
-    def observation_space(self) -> base.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpecs:
         return {
-            "is_closed":
-                gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
-            "pos":
-                gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32),
-            "object_detected":
-                gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+            "is_closed": specs.BoundedArray((1,), np.float32, 0, 1),
+            "pos": specs.BoundedArray((1,), np.float32, 0, 1),
+            "object_detected": specs.BoundedArray((1,), np.float32, 0, 1),
         }
 
     @property
-    def max_position(self):
+    def max_position(self) -> int:
         return self._max_position
 
     @property
-    def min_position(self):
+    def min_position(self) -> int:
         return self._min_position
 
     @property
-    def object_detected(self):
+    def object_detected(self) -> bool:
         return self._obj_status in (
             RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
             RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
@@ -93,22 +92,21 @@ class GripperActionMode(base.Node, abc.ABC):
 
 
 class Discrete(GripperActionMode):
-    """Opens or closes gripper."""
+    """Fully open or close gripper."""
 
-    def step(self, action: base.Action):
+    def step(self, action: types.Action) -> None:
         self.move(
             self._max_position if action > 0.5 else self._min_position
         )
 
-    @property
-    def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Box(low=0., high=1., shape=(), dtype=np.float32)
+    def action_spec(self) -> types.ActionSpec:
+        return specs.BoundedArray((), np.float32, 0, 1)
 
 
 class Continuous(GripperActionMode):
-    """Fine-grained control of a gripper."""
+    """Fine-grained control over a gripper."""
 
-    def step(self, action: base.Action):
+    def step(self, action: types.Action) -> None:
         action = int(self._delta * (action + 1.) / 2 + self._min_position)
         if self._absolute:
             pos = action
@@ -117,6 +115,5 @@ class Continuous(GripperActionMode):
             pos = np.clip(pos, self._min_position, self._max_position)
         self.move(pos)
 
-    @property
-    def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Box(low=-1., high=1., shape=(), dtype=np.float32)
+    def action_spec(self) -> types.ActionSpec:
+        return specs.BoundedArray((), np.float32, -1, 1)

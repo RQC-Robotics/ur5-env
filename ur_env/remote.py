@@ -8,16 +8,16 @@ import socket
 import pickle
 import logging
 
+_log = logging.getLogger(__name__)
+
 Address = Tuple[str, int]
 PKG_SIZE = 8192
-
-_log = logging.getLogger(__name__)
 
 
 class Command(IntEnum):
     RESET = 0
-    ACT_SPACE = 1
-    OBS_SPACE = 2
+    ACT_SPEC = 1
+    OBS_SPEC = 2
     STEP = 3
     CLOSE = 4
     PING = 5
@@ -95,14 +95,12 @@ class RemoteEnvClient(RemoteBase):
         self._send_cmd(Command.CLOSE)
         self._sock.close()
 
-    @property
-    def action_space(self):
-        self._send_cmd(Command.ACT_SPACE)
+    def action_spec(self):
+        self._send_cmd(Command.ACT_SPEC)
         return self._recv()
 
-    @property
-    def observation_space(self):
-        self._send_cmd(Command.OBS_SPACE)
+    def observation_spec(self):
+        self._send_cmd(Command.OBS_SPEC)
         return self._recv()
 
 
@@ -143,10 +141,10 @@ class RemoteEnvServer(RemoteBase):
             data = self._env.reset()
         elif cmd == Command.STEP:
             data = self.step()
-        elif cmd == Command.ACT_SPACE:
-            data = self.action_space()
-        elif cmd == Command.OBS_SPACE:
-            data = self.observation_space()
+        elif cmd == Command.ACT_SPEC:
+            data = self.action_spec()
+        elif cmd == Command.OBS_SPEC:
+            data = self.observation_spec()
         elif cmd == Command.PING:
             data = "PING!"
         elif cmd == Command.CLOSE:
@@ -164,11 +162,11 @@ class RemoteEnvServer(RemoteBase):
         action = self._recv()
         return self._env.step(action)
 
-    def action_space(self):
-        return self._env.action_space
+    def action_spec(self):
+        return self._env.action_spec()
 
-    def observation_space(self):
-        return self._env.observation_space
+    def observation_spec(self):
+        return self._env.observation_spec()
 
     def close(self):
         self._env.close()

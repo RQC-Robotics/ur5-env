@@ -1,4 +1,4 @@
-from typing import Optional, List, NamedTuple, MutableMapping, Tuple, Dict, Any
+from typing import Optional, List, NamedTuple, MutableMapping, Tuple, Dict
 import re
 import time
 import pathlib
@@ -10,10 +10,16 @@ from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
 from dashboard_client import DashboardClient
 
-from ur_env import base
-from ur_env.cameras.realsense import RealSense
-from ur_env.cameras.kinect import Kinect
-from ur_env.robot import ACTION_MODES
+from ur_env import types
+from ur_env.scene.nodes.base import Node
+from ur_env.scene import nodes
+form ur_env.scene.nodes.robot import ACTION_MODES
+
+
+class RobotInterfaces(NamedTuple):
+    rtde_control: RTDEControlInterface
+    rtde_receive: RTDEReceiveInterface
+    dashboard_client: DashboardClient
 
 
 class SceneConfig(NamedTuple):
@@ -42,31 +48,25 @@ class SceneConfig(NamedTuple):
     gripper_absolute_mode: bool = True
 
 
-class RobotInterfaces(NamedTuple):
-    rtde_control: RTDEControlInterface
-    rtde_receive: RTDEReceiveInterface
-    dashboard_client: DashboardClient
-
-
 class Scene:
     """Object that conduct all nodes.
 
-    Can be updated by performing action on it
+    Can be updated by performing an action on it
     and then queried to obtain observation."""
 
     def __init__(
             self,
             robot_interfaces: RobotInterfaces,
-            *nodes: base.Node,
-    ):
+            *nodes: Node,
+    ) -> None:
         self._interfaces = robot_interfaces
+        _check_for_name_collision(nodes)
         self._nodes = nodes
-        _check_for_name_collision(self._nodes)
-        self._node_names = tuple(map(base.Node.name, self._nodes))
+        self._node_names = tuple(map(Node.name, self._nodes))
 
-    def step(self, action: Dict[str, base.Action]):
+    def step(self, action: Dict[str, types.Action]) -> None:
         """Scene can be updated partially
-        if some nodes are not present in an action keys.
+        if some nodes are not present in action keys.
         """
         for node in self._nodes:
             node_action = action.get(node.name)
@@ -77,7 +77,7 @@ class Scene:
         for node in self._nodes:
             node.initialize_episode(random_state)
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> types.Observation:
         """Gathers all observations."""
         observations = OrderedDict()
         for node in self._nodes:
@@ -86,23 +86,61 @@ class Scene:
             observations.update(obs)
         return observations
 
-    @property
-    def observation_space(self) -> base.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpecs:
         """Gathers all observation specs."""
         obs_specs = OrderedDict()
         for node in self._nodes:
-            spec = node.observation_space
+            spec = node.observation_spec()
             obs_specs.update(_name_mangling(node.name, spec))
         return obs_specs
 
-    @property
-    def action_space(self) -> Dict[str, base.ActionSpec]:
+    def action_spec(self) -> Dict[str, types.ActionSpec]:
         """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
-            if node.action_space:
-                act_specs[node.name] = node.action_space
+            act_spec = node.action_spec()
+            if act_spec is not None:
+                act_specs[node.name] = act_spec
         return act_specs
+
+    def close(self):
+        """Close all connections, shutdown robot and camera."""
+        for node in self.nodes:
+            node.close()
+        rtde_c, rtde_r, dashboard = self._interfaces
+        dashboard.stop()
+        rtde_r.disconnect()
+        rtde_c.disconnect()
+        dashboard.disconnect()
+
+    def __getattr__(self, name: str) -> Node:
+        """Allows to obtain node by its name assuming node name is unique."""
+        # While making things easier it can cause troubles.
+        try:
+            idx = self._node_names.index(name)
+        except ValueError as exp:
+            raise AttributeError("Scene has no attribute " + name) from exp
+        return self._nodes[idx]
+
+    @property
+    def rtde_control(self) -> RTDEControlInterface:
+        return self._interfaces.rtde_control
+
+    @property
+    def rtde_receive(self) -> RTDEReceiveInterface:
+        return self._interfaces.rtde_receive
+
+    @property
+    def nodes(self) -> Tuple[Node]:
+        return self._nodes
+
+    @property
+    def dashboard_client(self) -> DashboardClient:
+        return self._interfaces.dashboard_client
+
+    @property
+    def robot_interfaces(self) -> RobotInterfaces:
+        return self._interfaces
 
     @classmethod
     def from_config(
@@ -134,65 +172,25 @@ class Scene:
             interfaces,
             arm_action_mode,
             gripper_action_mode,
-            RealSense(cfg.realsense_width, cfg.realsense_height),
-            Kinect(),
+            nodes.RealSense(cfg.realsense_width, cfg.realsense_height),
+            nodes.Kinect(),
         )
-
-    def close(self):
-        """Close all connections, shutdown robot and camera."""
-        for node in self.nodes:
-            node.close()
-        rtde_c, rtde_r, dashboard = self._interfaces
-        dashboard.stop()
-        rtde_r.disconnect()
-        rtde_c.disconnect()
-        dashboard.disconnect()
-
-    def __getattr__(self, name: str) -> base.Node:
-        """Allows to obtain node by its name assuming node name is unique."""
-        # While making things easier it can cause troubles.
-        try:
-            idx = self._node_names.index(name)
-        except ValueError as exp:
-            raise AttributeError("Scene has no attribute " + name) from exp
-        return self._nodes[idx]
-
-    @property
-    def rtde_control(self) -> RTDEControlInterface:
-        return self._interfaces.rtde_control
-
-    @property
-    def rtde_receive(self) -> RTDEReceiveInterface:
-        return self._interfaces.rtde_receive
-
-    @property
-    def nodes(self) -> Tuple[base.Node]:
-        return self._nodes
-
-    @property
-    def dashboard_client(self) -> DashboardClient:
-        return self._interfaces.dashboard_client
-
-    @property
-    def robot_interfaces(self) -> RobotInterfaces:
-        return self._interfaces
 
 
 def _name_mangling(node_name, obj):
     """
     Prevents key collision between different nodes.
-    But it still can occur if there are two equal node names.
+    But it still can occur if there are at least two equal node names.
     """
     if isinstance(obj, MutableMapping):
         mangled = type(obj)()
         for key, value in obj.items():
             mangled[f"{node_name}/{key}"] = value
         return mangled
-
     return {node_name: obj}
 
 
-def _check_for_name_collision(nodes: List[base.Node]):
+def _check_for_name_collision(nodes: List[Node]):
     """It is desirable to have different names for nodes."""
     names = list(map(lambda n: n.name, nodes))
     unique_names = set(names)
@@ -222,11 +220,12 @@ def load_schema(path: Optional[str] = None) -> Tuple[OrderedDict, List[str]]:
     return schema, variables
 
 
-class NoOpDashboardClient(DashboardClient):
+class _DashboardClient(DashboardClient):
     """
     Disables commands that don't work reliably or
     shouldn't be used while env is running.
     """
+
     def loadURP(self, urp_name: str):
         """
         It is always enough to run single External Control URCap program.
@@ -251,14 +250,15 @@ def robot_interfaces_factory(
         port: int = 50003,
         frequency: float = -1.,
         variables: Optional[List[str]] = None
-) -> Tuple[RTDEControlInterface, RTDEReceiveInterface, DashboardClient]:
+) -> RobotInterfaces:
     """
     Interfaces to communicate with the robot.
-    Connection can't be established if there exists already opened one.
+    Connection can't be established if there already opened one.
     Actually, it will result in a PolyScope error popup.
     """
-    dashboard = NoOpDashboardClient(host)
+    dashboard = _DashboardClient(host)
     dashboard.connect()
+    assert dashboard.isConnected()
     assert dashboard.isInRemoteControl(), "Not in a remote control."
 
     if "POWER_OFF" in dashboard.robotmode():
@@ -279,7 +279,6 @@ def robot_interfaces_factory(
         frequency=frequency,
         variables=variables or []
     )
-
     assert rtde_r.isConnected()
     assert rtde_c.isConnected()
 

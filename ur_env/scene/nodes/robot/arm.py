@@ -1,13 +1,14 @@
+from typing import List, Union, Optional
 import abc
-from typing import List, Union
 from collections import OrderedDict
 
-import gym
 import numpy as np
+from dm_env import specs
 from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface as RTDEControl
 
-from ur_env import base
+from ur_env import types, exceptions
+from ur_env.scene.nodes import base
 
 _JOINT_LIMITS = np.float32([2*np.pi, 2*np.pi, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
 
@@ -16,14 +17,15 @@ class ArmObservation:
     """Polls receiver multiple times to get all the observations
      specified in a scheme.
      """
+
     def __init__(self,
                  rtde_r: RTDEReceiveInterface,
                  schema: OrderedDict,
-                 ):
+                 ) -> None:
         self._rtde_r = rtde_r
         self._schema = schema
 
-    def __call__(self) -> base.Observation:
+    def __call__(self) -> types.Observation:
         """Get all observations specified in the schema one by one."""
         obs = OrderedDict()
         for key in self._schema.keys():
@@ -31,23 +33,20 @@ class ArmObservation:
             obs[key] = np.asarray(value)
         return obs
 
-    @property
-    def observation_space(self) -> base.ObservationSpecs:
-        obs_space = OrderedDict()
+    def observation_spec(self) -> types.ObservationSpecs:
+        obs_spec = OrderedDict()
         _types = dict(int=int)
         # Limits should also be obtained from the schema.
         for key, spec_dict in self._schema.items():
-            obs_space[key] = gym.spaces.Box(
-                low=-np.inf, high=np.inf,
+            obs_spec[key] = specs.Array(
                 shape=tuple(spec_dict["shape"]),
                 dtype=_types.get(spec_dict["dtype"], float)
             )
-        return obs_space
+        return obs_spec
 
 
 class ArmActionMode(base.Node):
     """UR5e arm."""
-    _name = "arm"
 
     def __init__(
             self,
@@ -57,11 +56,13 @@ class ArmActionMode(base.Node):
             speed: float = .25,
             acceleration: float = 1.2,
             absolute_mode: bool = True,
-    ):
+            name: Optional[str] = None
+    ) -> None:
         """Schema specifies desirable observables: name, shape, dtype.
 
         Absolute flag switches between absolute or relative coordinates change.
         """
+        super().__init__(name)
         self._rtde_c = rtde_c
         self._rtde_r = rtde_r
         self._observation = ArmObservation(rtde_r, schema)
@@ -72,45 +73,46 @@ class ArmActionMode(base.Node):
         self._estim_tcp = None
         self._estim_q = None
 
-    def step(self, action: base.Action):
+    def step(self, action: types.Action) -> None:
         self._pre_action(action)
         self._act_fn(action)
         self._post_action()
 
-    def initialize_episode(self, random_state: np.random.Generator):
+    def initialize_episode(self, random_state: np.random.Generator) -> None:
+        del random_state
         self._estim_tcp = None
         self._estim_q = None
 
-    def get_observation(self) -> base.Observation:
+    def get_observation(self) -> types.Observation:
         return self._observation()
 
     @abc.abstractmethod
-    def _estimate_next(self, action: base.Action):
+    def _estimate_next(self, action: types.Action) -> None:
         """Next pose can be used to predict if safety limits
         would not be violated.
         One must update at least one of q/tcp estimations.
         """
 
-    def _pre_action(self, action: base.Action):
+    def _pre_action(self, action: types.Action) -> None:
         """Checks if an action can be performed safely."""
         self._update_state()
         self._estimate_next(action)
 
         if self._estim_tcp is not None:
             if not self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_tcp)):
-                raise base.SafetyLimitsViolation(
+                raise exceptions.SafetyLimitsViolation(
                     f"Pose safety limits violation: {self._estim_tcp}")
         elif self._estim_q is not None:
             if not self._rtde_c.isJointsWithinSafetyLimits(list(self._estim_q)):
-                raise base.SafetyLimitsViolation(
+                raise exceptions.SafetyLimitsViolation(
                     f"Joints safety limits violation: {self._estim_q}")
         else:
             raise RuntimeError("At least one estimation must be done.")
 
-    def _post_action(self):
+    def _post_action(self) -> None:
         """Checks if a resulting pose is consistent with an estimated."""
         if self._rtde_r.getSafetyMode() > 1:
-            raise base.ProtectiveStop(
+            raise exceptions.ProtectiveStop(
                 "Safety mode is not in a normal or reduced mode.")
 
         self._update_state()
@@ -118,7 +120,7 @@ class ArmActionMode(base.Node):
                 self._estim_tcp is not None and
                 not np.allclose(self._estim_tcp, self._actual_tcp, atol=.1)
         ):
-            raise base.PoseEstimationError(
+            raise exceptions.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
                 f"{self._estim_tcp} and {self._actual_tcp}."
             )
@@ -127,22 +129,23 @@ class ArmActionMode(base.Node):
             self._estim_q is not None and
             not np.allclose(self._estim_q, self._actual_q, atol=.1)
         ):
-            raise base.PoseEstimationError(
+            raise exceptions.PoseEstimationError(
                 f"Estimated and Actual Q discrepancy:"
                 f"{self._estim_q} and {self._actual_q}"
             )
 
     @abc.abstractmethod
-    def _act_fn(self, action: base.Action) -> bool:
+    def _act_fn(self, action: types.Action) -> bool:
         """Function of RTDEControlInterface to call."""
 
-    @property
-    def observation_space(self) -> base.ObservationSpecs:
-        return self._observation.observation_space
+    def observation_spec(self) -> types.ObservationSpecs:
+        return self._observation.observation_spec()
 
-    def _update_state(self):
+    def _update_state(self) -> None:
         """Action command or next pose estimation
          may require knowledge of the current state.
+
+         It updates every step to hold the most recent state.
         """
         self._actual_tcp = np.asarray(self._rtde_r.getActualTCPPose())
         self._actual_q = np.asarray(self._rtde_r.getActualQ())
@@ -155,24 +158,23 @@ class TCPPosition(ArmActionMode):
     a final TCPPose.
     """
 
-    def _estimate_next(self, action: base.Action):
+    def _estimate_next(self, action: types.Action) -> None:
         if self._absolute:
             self._estim_tcp = action
         else:
             self._estim_tcp = action + self._actual_tcp
 
-    def _act_fn(self, action: base.Action) -> bool:
+    def _act_fn(self, action: types.Action) -> bool:
         return self._rtde_c.moveL(
             pose=list(self._estim_tcp),
             speed=self._speed,
             acceleration=self._acceleration
         )
 
-    @property
-    def action_space(self) -> base.ActionSpec:
-        return gym.spaces.Box(
-            low=np.array(3 * [-np.inf] + 3 * [-2*np.pi], dtype=np.float32),
-            high=np.array(3 * [np.inf] + 3 * [2*np.pi], dtype=np.float32),
+    def action_spec(self) -> types.ActionSpec:
+        return specs.BoundedArray(
+            minimum=np.array(3 * [-np.inf] + 3 * [-2*np.pi], dtype=np.float32),
+            maximum=np.array(3 * [np.inf] + 3 * [2*np.pi], dtype=np.float32),
             shape=(6,),
             dtype=np.float32
         )
@@ -181,7 +183,7 @@ class TCPPosition(ArmActionMode):
 class JointsPosition(ArmActionMode):
     """Act in joints space f64 q[6] by executing moveJ."""
 
-    def _estimate_next(self, action: base.Action):
+    def _estimate_next(self, action: types.Action) -> None:
         if self._absolute:
             self._estim_q = action
         else:
@@ -191,19 +193,18 @@ class JointsPosition(ArmActionMode):
                                     a_max=_JOINT_LIMITS
                                     )
 
-    def _act_fn(self, action: base.Action) -> bool:
+    def _act_fn(self, action: types.Action) -> bool:
         return self._rtde_c.moveJ(
             q=list(self._estim_q),
             speed=self._speed,
             acceleration=self._acceleration
         )
 
-    @property
-    def action_space(self) -> base.ActionSpec:
+    def action_spec(self) -> types.ActionSpec:
         lim = _JOINT_LIMITS
-        return gym.spaces.Box(
-            low=-lim,
-            high=lim,
+        return specs.BoundedArray(
+            minimum=-lim,
+            maximum=lim,
             shape=lim.shape,
             dtype=lim.dtype
         )
@@ -216,7 +217,7 @@ def fracture_trajectory(
         speed: Union[float, List[float]] = 0.25,
         acceleration: Union[float, List[float]] = 0.5,
         blend: Union[float, List[float]] = .0,
-):
+) -> List[List[float]]:
     """Splits trajectory to equidistant (per dimension) intermediate waypoints.
 
     Speed, accel. and blend are concatenated to waypoints, so
