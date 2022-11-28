@@ -2,6 +2,7 @@
 from typing import Any, Union, Tuple
 import abc
 import time
+import logging
 
 import numpy as np
 import dm_env
@@ -9,6 +10,8 @@ from dm_env import specs
 
 from ur_env import types, exceptions
 from ur_env.scene import Scene
+
+logging.basicConfig(format="%(asctime)s %(message)s")
 
 
 class Task(abc.ABC):
@@ -74,7 +77,7 @@ class Task(abc.ABC):
         rtde_c, rtde_r, dashboard = scene.robot_interfaces
         is_running = rtde_r.getRobotMode() == 7
         if rtde_r.isProtectiveStopped() or not is_running:
-            print("Protective stop triggered!")
+            logging.warning("Protective stop triggered!")
             time.sleep(6)  # Unlock can only happen after 5 sec. delay
             dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
@@ -140,7 +143,7 @@ class Environment:
             is_terminal = \
                 isinstance(exp, exceptions.CriticalRTDEError) \
                 or self._violations >= self._max_violations
-            print(exp)  # todo: logging instead of this.
+            logging.warning(exp)
         else:
             observation = self._task.get_observation(self._scene)
             reward = self._task.get_reward(self._scene)

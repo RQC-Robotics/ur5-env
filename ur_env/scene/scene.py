@@ -12,8 +12,8 @@ from dashboard_client import DashboardClient
 
 from ur_env import types
 from ur_env.scene.nodes.base import Node
-from ur_env.scene import nodes
-form ur_env.scene.nodes.robot import ACTION_MODES
+from ur_env.scene.nodes.robot import ACTION_MODES
+from ur_env.scene.nodes import RealSense, Kinect
 
 
 class RobotInterfaces(NamedTuple):
@@ -22,6 +22,7 @@ class RobotInterfaces(NamedTuple):
     dashboard_client: DashboardClient
 
 
+# TODO: replace by a proper heterogeneous config or remove.
 class SceneConfig(NamedTuple):
     """Full scene configuration."""
     # RTDE
@@ -57,11 +58,11 @@ class Scene:
     def __init__(
             self,
             robot_interfaces: RobotInterfaces,
-            *nodes: Node,
+            *nodes_: Node,
     ) -> None:
         self._interfaces = robot_interfaces
-        _check_for_name_collision(nodes)
-        self._nodes = nodes
+        _check_for_name_collision(nodes_)
+        self._nodes = nodes_
         self._node_names = tuple(map(Node.name, self._nodes))
 
     def step(self, action: Dict[str, types.Action]) -> None:
@@ -105,7 +106,7 @@ class Scene:
 
     def close(self):
         """Close all connections, shutdown robot and camera."""
-        for node in self.nodes:
+        for node in self._nodes:
             node.close()
         rtde_c, rtde_r, dashboard = self._interfaces
         dashboard.stop()
@@ -172,8 +173,8 @@ class Scene:
             interfaces,
             arm_action_mode,
             gripper_action_mode,
-            nodes.RealSense(cfg.realsense_width, cfg.realsense_height),
-            nodes.Kinect(),
+            RealSense(cfg.realsense_width, cfg.realsense_height),
+            Kinect(),
         )
 
 
@@ -190,9 +191,9 @@ def _name_mangling(node_name, obj):
     return {node_name: obj}
 
 
-def _check_for_name_collision(nodes: List[Node]):
+def _check_for_name_collision(nodes_: List[Node]):
     """It is desirable to have different names for nodes."""
-    names = list(map(lambda n: n.name, nodes))
+    names = list(map(lambda n: n.name, nodes_))
     unique_names = set(names)
     assert len(unique_names) == len(names),\
         f"Name collision: {names}"

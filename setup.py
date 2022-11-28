@@ -8,7 +8,7 @@ with open("requirements.txt", encoding="utf-8") as req:
 
 
 def get_version():
-    path = os.path.join(__file__, "ur_env/__init__.py")
+    path = os.path.join(os.path.dirname(__file__), "ur_env/__init__.py")
     with open(path) as f:
         version = re.search(r"__version__.*(\d+.\d+.\d+)", f.read())[1]
     return version

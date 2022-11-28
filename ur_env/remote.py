@@ -149,13 +149,12 @@ class RemoteEnvServer(RemoteBase):
             data = "PING!"
         elif cmd == Command.CLOSE:
             self.close()
+            return 0
         else:
             msg = f"Unknown command: {cmd}"
             _log.error(msg)
             raise ValueError(msg)
 
-        if cmd == Command.CLOSE:
-            return 0
         return self._send(data)
 
     def step(self):

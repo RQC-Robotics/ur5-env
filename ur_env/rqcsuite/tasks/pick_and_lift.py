@@ -4,23 +4,23 @@ import numpy as np
 from dm_env import specs
 
 from ur_env.environment import Task
-from ur_env.rqcsuite.common import DEFAULT_Q, GOAL_KEY, ActualQ, RNG
+from ur_env.rqcsuite.common import DEFAULT_Q, GOAL_KEY, ActualQ, RNG, CTRL_LIMIT
 
 
 class PickAndLift(Task):
     """Grasp an object and lift it."""
-    DOF: int = 3
-    ctrl_lim: float = .03
     noise: float = .04
 
     def __init__(self,
                  rng: RNG,
+                 dof: int = 3,
                  threshold: float = .2,
                  init_q: ActualQ = DEFAULT_Q.copy(),
                  targets: Optional[Iterable[np.ndarray]] = None
                  ):
         super().__init__(rng)
         self._init_q = list(init_q)
+        self._dof = dof
         self._threshold = threshold
         self._targets = tuple(targets) if targets else None
 
@@ -40,7 +40,8 @@ class PickAndLift(Task):
         pose = scene.rtde_receive.getActualTCPPose()
         pos, rot = pose[:3], pose[3:]
         delta = self.noise * self._rng.uniform(-1, 1, (3,))
-        self._init_pos = np.asarray(pos) + delta 
+        delta[:-self._dof] = 0.
+        self._init_pos = np.asarray(pos) + delta
         scene.rtde_control.moveL(list(self._init_pos) + rot)
         scene.gripper.move(scene.gripper.min_position)
 
@@ -83,8 +84,8 @@ class PickAndLift(Task):
 
     def action_spec(self, scene):
         dtype = np.float32
-        lim = self.ctrl_lim
-        dof = self.DOF
+        lim = CTRL_LIMIT
+        dof = self._dof
         return specs.BoundedArray(
             minimum=np.array(dof * [-lim] + [0], dtype),
             maximum=np.array(dof * [lim] + [1], dtype),
@@ -96,7 +97,7 @@ class PickAndLift(Task):
         arm, gripper = action[:-1], action[-1]
 
         pose = scene.rtde_receive.getActualTCPPose()
-        arm = np.concatenate([np.zeros(3 - self.DOF), arm], dtype=arm.dtype)
+        arm = np.concatenate([np.zeros(3 - self._dof), arm], dtype=arm.dtype)
         pos = np.array(pose[:3])
         if np.linalg.norm(arm + pos - self._init_pos) > .15:
             arm = np.zeros_like(arm)
