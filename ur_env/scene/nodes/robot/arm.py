@@ -69,7 +69,7 @@ class ArmActionMode(base.Node):
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
-        # An action should update at least one of the following estimations.
+        # Action should update at least one of the following estimations.
         self._estim_tcp = None
         self._estim_q = None
 

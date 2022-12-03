@@ -1,14 +1,14 @@
 from typing import Optional, List, NamedTuple, MutableMapping, Tuple, Dict
+from collections import OrderedDict
 import re
 import time
 import pathlib
-from collections import OrderedDict
 
 import numpy as np
 from ruamel import yaml
+from dashboard_client import DashboardClient
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
-from dashboard_client import DashboardClient
 
 from ur_env import types
 from ur_env.scene.nodes.base import Node
@@ -132,7 +132,7 @@ class Scene:
         return self._interfaces.rtde_receive
 
     @property
-    def nodes(self) -> Tuple[Node]:
+    def nodes(self) -> Tuple[Node, ...]:
         return self._nodes
 
     @property

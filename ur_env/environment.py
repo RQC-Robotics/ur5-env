@@ -1,4 +1,4 @@
-"""Base objects definition."""
+"""Base RL entities definition."""
 from typing import Any, Union, Tuple
 import abc
 import time
@@ -17,7 +17,7 @@ logging.basicConfig(format="%(asctime)s %(message)s")
 class Task(abc.ABC):
     """Defines relevant for RL task methods."""
 
-    def __init__(self, rng: Union[int, np.random.Generator]):
+    def __init__(self, rng: types.RNG):
         if isinstance(rng, int):
             self._rng = np.random.default_rng(rng)
 
@@ -59,9 +59,9 @@ class Task(abc.ABC):
         return specs.Array((), float)
 
     def discount_spec(self) -> specs.BoundedArray:
-        return specs.BoundedArray((), float, 0, 1)
+        return specs.BoundedArray((), float, 0., 1.)
 
-    def before_step(self, action: Any, scene: Scene) -> types.Action:
+    def before_step(self, action: Any, scene: Scene):
         """Pre action step."""
         # Reconnection problem.
         # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
@@ -70,7 +70,6 @@ class Task(abc.ABC):
             rtde_r.reconnect()
         if not rtde_c.isConnected():
             rtde_c.reconnect()
-        return self.preprocess_action(action, scene)
 
     def after_step(self, scene: Scene):
         """Post action step."""
@@ -118,6 +117,7 @@ class Environment:
             try:
                 self._task.initialize_episode(self._scene)
             except exceptions.RTDEError as exp:
+                logging.warning(exp)
                 self._violations += 1
                 if self._violations >= self._max_violations:
                     raise exp
@@ -131,13 +131,14 @@ class Environment:
     def step(self, action:  Any) -> dm_env.TimeStep:
         """Perform an action and update environment."""
         try:
-            action = self._task.before_step(action, self._scene)
+            self._task.before_step(action, self._scene)
+            action = self._task.preprocess_action(action, self._scene)
             self._scene.step(action)
         except exceptions.RTDEError as exp:
             self._violations += 1
             observation = self._prev_obs
             discount = self._task.get_discount(self._scene)
-            reward = 0
+            reward = 0.
             truncate = False
 
             is_terminal = \

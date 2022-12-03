@@ -16,7 +16,7 @@ class Node(abc.ABC):
         """Node instances should preserve unique names."""
         if name is None:
             name = self.__class__.__name__
-        self._name = name
+        self.__name = name
 
     def step(self, action: types.Action) -> None:
         """Performs action and update state."""
@@ -43,4 +43,4 @@ class Node(abc.ABC):
     def name(self) -> str:
         """Node identifier. Used as an action key
         and for accessing attributes in a scene."""
-        return self._name
+        return self.__name

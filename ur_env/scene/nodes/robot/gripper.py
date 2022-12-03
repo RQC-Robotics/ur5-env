@@ -100,7 +100,7 @@ class Discrete(GripperActionMode):
         )
 
     def action_spec(self) -> types.ActionSpec:
-        return specs.BoundedArray((), np.float32, 0, 1)
+        return specs.BoundedArray((), float, 0., 1.)
 
 
 class Continuous(GripperActionMode):
@@ -116,4 +116,4 @@ class Continuous(GripperActionMode):
         self.move(pos)
 
     def action_spec(self) -> types.ActionSpec:
-        return specs.BoundedArray((), np.float32, -1, 1)
+        return specs.BoundedArray((), float, -1., 1.)
