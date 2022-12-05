@@ -1,5 +1,5 @@
 """Base RL entities definition."""
-from typing import Any, Union, Tuple
+from typing import Any, Tuple
 import abc
 import time
 import logging
@@ -11,7 +11,8 @@ from dm_env import specs
 from ur_env import types, exceptions
 from ur_env.scene import Scene
 
-logging.basicConfig(format="%(asctime)s %(message)s")
+LOGNAME = "UREnv"
+_log = logging.getLogger(LOGNAME)
 
 
 class Task(abc.ABC):
@@ -76,7 +77,7 @@ class Task(abc.ABC):
         rtde_c, rtde_r, dashboard = scene.robot_interfaces
         is_running = rtde_r.getRobotMode() == 7
         if rtde_r.isProtectiveStopped() or not is_running:
-            logging.warning("Protective stop triggered!")
+            _log.warning("Protective stop triggered.")
             time.sleep(6)  # Unlock can only happen after 5 sec. delay
             dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
@@ -117,7 +118,7 @@ class Environment:
             try:
                 self._task.initialize_episode(self._scene)
             except exceptions.RTDEError as exp:
-                logging.warning(exp)
+                _log.warning(exp)
                 self._violations += 1
                 if self._violations >= self._max_violations:
                     raise exp
@@ -135,6 +136,7 @@ class Environment:
             action = self._task.preprocess_action(action, self._scene)
             self._scene.step(action)
         except exceptions.RTDEError as exp:
+            _log.warning(exp)
             self._violations += 1
             observation = self._prev_obs
             discount = self._task.get_discount(self._scene)
@@ -144,7 +146,6 @@ class Environment:
             is_terminal = \
                 isinstance(exp, exceptions.CriticalRTDEError) \
                 or self._violations >= self._max_violations
-            logging.warning(exp)
         else:
             observation = self._task.get_observation(self._scene)
             reward = self._task.get_reward(self._scene)

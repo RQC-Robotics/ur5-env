@@ -19,7 +19,7 @@ setup(
     version=get_version(),
     packages=find_packages(),
     python_requires=">=3.6",
-    package_data={"ur_env.robot": ["observations_schema.yaml"]},
+    package_data={"ur_env.scene.nodes.robot": ["observations_schema.yaml"]},
     install_requires=["numpy", "gym"],
     extras_require={
         "all": all_requirements

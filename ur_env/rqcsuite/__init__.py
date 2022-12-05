@@ -1,4 +1,4 @@
-from tasks.pick_and_lift import PickAndLift
+from .tasks.pick_and_lift import PickAndLift
 
 
 _name_to_task = dict(

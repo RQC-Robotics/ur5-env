@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Tuple
 
 import numpy as np
 from dm_env import specs
@@ -26,7 +26,7 @@ class Kinect(base.Node):
 
     def __init__(self,
                  config: k4a_config.Config = _DEFAULT_CONFIG,
-                 name: Optional[str] = None,
+                 name: str = "kinect",
                  ) -> None:
         """Be sure when using high color_res format or FPS
         since w/o GPU low latency depth map processing may be inaccessible.

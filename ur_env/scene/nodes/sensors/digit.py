@@ -1,4 +1,4 @@
-from typing import Optional, Literal
+from typing import Literal
 
 import numpy as np
 from dm_env import specs
@@ -16,7 +16,7 @@ class Digit(base.Node):
                  resolution: Literal["VGA", "QVGA"] = "QVGA",
                  fps: int = 60,
                  intensity: int = _Digit.LIGHTING_MAX,
-                 name: Optional[str] = None,
+                 name: str = "digit",
                  ) -> None:
         """
         Serial can be found with digit_interface.DigitHandler.

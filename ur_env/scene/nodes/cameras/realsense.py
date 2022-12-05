@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 from dm_env import specs
@@ -14,7 +14,7 @@ class RealSense(base.Node):
     def __init__(self,
                  width: int = 848,
                  height: int = 480,
-                 name: Optional[str] = None,
+                 name: str = "realsense",
                  ) -> None:
         super().__init__(name)
         self._width = width

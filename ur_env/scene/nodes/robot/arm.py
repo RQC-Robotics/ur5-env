@@ -1,4 +1,4 @@
-from typing import List, Union, Optional
+from typing import List, Union
 import abc
 from collections import OrderedDict
 
@@ -56,7 +56,7 @@ class ArmActionMode(base.Node):
             speed: float = .25,
             acceleration: float = 1.2,
             absolute_mode: bool = True,
-            name: Optional[str] = None
+            name: str = "arm"
     ) -> None:
         """Schema specifies desirable observables: name, shape, dtype.
 

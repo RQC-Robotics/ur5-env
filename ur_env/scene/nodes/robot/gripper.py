@@ -18,7 +18,7 @@ class GripperActionMode(base.Node):
             force: int = 100,
             speed: int = 100,
             absolute_mode: bool = True,
-            name: Optional[str] = None
+            name: str = "gripper"
     ) -> None:
         """Pos, speed and force are constrained to [0, 255]."""
         super().__init__(name)

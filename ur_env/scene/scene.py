@@ -63,7 +63,7 @@ class Scene:
         self._interfaces = robot_interfaces
         _check_for_name_collision(nodes_)
         self._nodes = nodes_
-        self._node_names = tuple(map(Node.name, self._nodes))
+        self._node_names = tuple(map(lambda node: node.name, self._nodes))
 
     def step(self, action: Dict[str, types.Action]) -> None:
         """Scene can be updated partially
@@ -206,7 +206,8 @@ def load_schema(path: Optional[str] = None) -> Tuple[OrderedDict, List[str]]:
     """
     if path is None:
         path = pathlib.Path(__file__).parent
-        path = path / "robot" / "observations_schema.yaml"
+        path = path / "nodes/robot/observations_schema.yaml"
+        path = path.resolve()
 
     with open(path, encoding="utf-8") as file:
         schema = yaml.safe_load(file)
