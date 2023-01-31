@@ -69,6 +69,10 @@ class Kinect(base.Node):
         self._k4a.stop()
 
     @property
+    def k4a(self) -> Pyk4a:
+	    return self._k4a
+
+    @property
     def config(self) -> k4a_config.Config:
         return self._config
 
