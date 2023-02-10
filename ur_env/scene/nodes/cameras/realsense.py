@@ -29,7 +29,7 @@ class RealSense(base.Node):
         return {
             "depth": self._depth_scale * np.asanyarray(depth.get_data()),
             "image": np.asanyarray(rgb.get_data()),
-            "point_cloud": self._depth_scale * verts
+            "point_cloud": verts
 
         }
 
@@ -93,6 +93,7 @@ class RealSense(base.Node):
         #depth_sensor.set_option(rs.option.visual_preset, 3)
 
         # Wait for an auto calibration and update shapes after processing.
+        # Decimation can change depth frame shape.
         for _ in range(5):
             depth, rgb = self.capture_frameset()
         self._depth_height, self._depth_width =\

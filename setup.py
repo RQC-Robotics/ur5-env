@@ -18,9 +18,9 @@ setup(
     name="ur-env",
     version=get_version(),
     packages=find_packages(),
-    python_requires=">=3.6",
+    python_requires=">=3.8",
     package_data={"ur_env.scene.nodes.robot": ["observations_schema.yaml"]},
-    install_requires=["numpy", "gym"],
+    install_requires=["dm-env"],
     extras_require={
         "all": all_requirements
     }
