@@ -1,4 +1,4 @@
-"""Client-server connection with a robot."""
+"""Client-server connection for a dm_env.Environment."""
 from typing import Tuple, Optional, Any
 from enum import IntEnum
 import abc
@@ -8,37 +8,45 @@ import socket
 import pickle
 import logging
 
+import dm_env.specs
+
 _log = logging.getLogger(__name__)
 
 Address = Tuple[str, int]
 PKG_SIZE = 8192
 
 
-class Command(IntEnum):
-    RESET = 0
-    ACT_SPEC = 1
-    OBS_SPEC = 2
-    STEP = 3
-    CLOSE = 4
-    PING = 5
-
-
 class RemoteBase(abc.ABC):
-    """Unsafe and inefficient data transmission via pickle."""
+    """Transfer data over socket.
+
+    Serialization is done via pickle,
+    so it may require version correspondence.
+    """
+
+    class Command(IntEnum):
+        RESET = 0
+        ACT_SPEC = 1
+        OBS_SPEC = 2
+        REW_SPEC = 3
+        DISC_SPEC = 4
+        STEP = 5
+        CLOSE = 6
+        PING = 7
+
     def __init__(self, address: Optional[Address] = None):
         self._sock: socket.socket = None
         if address:
             self.connect(address)
 
     @abc.abstractmethod
-    def connect(self, address: Address):
+    def connect(self, address: Address) -> None:
         """Establish connection."""
 
     def _send_cmd(self, cmd: Command) -> int:
         cmd = struct.pack("h", cmd)
         return self._sock.send(cmd)
 
-    def _recv_cmd(self):
+    def _recv_cmd(self) -> int:
         cmd = self._sock.recv(2)
         return struct.unpack("h", cmd)[0]
 
@@ -57,10 +65,13 @@ class RemoteBase(abc.ABC):
 
 
 class RemoteEnvClient(RemoteBase):
-    """Client side of a remote robot env."""
+    """Client side of a remote env.
 
-    def connect(self, address: Address):
-        if self._sock:
+    Connect to an existing server to execute methods.
+    """
+
+    def connect(self, address: Address) -> None:
+        if self._sock is not None:
             return
 
         try:
@@ -73,46 +84,61 @@ class RemoteEnvClient(RemoteBase):
             self._sock = None
             raise
 
-    def ping(self):
+    def ping(self) -> float:
         start = time.time()
-        self._send_cmd(Command.PING)
+        self._send_cmd(RemoteBase.Command.PING)
         data = self._recv()
         delta = 1e3 * (time.time() - start)
         msg = f"{data} {delta: .2f} ms."
         _log.info(msg)
-        print(msg)
+        return delta
 
-    def step(self, action):
-        self._send_cmd(Command.STEP)
+    def step(self, action) -> dm_env.TimeStep:
+        self._send_cmd(RemoteBase.Command.STEP)
         self._send(action)
         return self._recv()
 
-    def reset(self):
-        self._send_cmd(Command.RESET)
+    def reset(self) -> dm_env.TimeStep:
+        self._send_cmd(RemoteBase.Command.RESET)
         return self._recv()
 
-    def close(self):
-        self._send_cmd(Command.CLOSE)
+    def close(self) -> None:
+        self._send_cmd(RemoteBase.Command.CLOSE)
         self._sock.close()
 
-    def action_spec(self):
-        self._send_cmd(Command.ACT_SPEC)
+    def action_spec(self) -> dm_env.specs.Array:
+        self._send_cmd(RemoteBase.Command.ACT_SPEC)
         return self._recv()
 
-    def observation_spec(self):
-        self._send_cmd(Command.OBS_SPEC)
+    def observation_spec(self) -> dm_env.specs.Array:
+        self._send_cmd(RemoteBase.Command.OBS_SPEC)
+        return self._recv()
+
+    def reward_spec(self) -> dm_env.specs.Array:
+        self._send_cmd(RemoteBase.Command.REW_SPEC)
+        return self._recv()
+
+    def discount_spec(self) -> dm_env.specs.BoundedArray:
+        self._send_cmd(RemoteBase.Command.DISC_SPEC)
         return self._recv()
 
 
 class RemoteEnvServer(RemoteBase):
-    """Server side hosting a robot."""
+    """Wrap an env to transfer over socket.
 
-    def __init__(self, env, address: Optional[Address] = None):
+    Only main methods are exposed, so be sure to include
+    all the relevant information in a timestep.
+    """
+
+    def __init__(self,
+                 env: dm_env.Environment,
+                 address: Optional[Address] = None
+                 ) -> None:
         self._env = env
         super().__init__(address)
 
-    def connect(self, address: Address):
-        if self._sock:
+    def connect(self, address: Address) -> None:
+        if self._sock is not None:
             return
 
         try:
@@ -125,10 +151,11 @@ class RemoteEnvServer(RemoteBase):
             self._sock = None
             raise
 
-    def run(self):
+    def run(self) -> None:
+        """Listen to a client until termination signal is received."""
         cmd = None
         try:
-            while cmd != Command.CLOSE:
+            while cmd != RemoteBase.Command.CLOSE:
                 cmd = self._recv_cmd()
                 self._on_receive(cmd)
         except (EOFError, KeyboardInterrupt, ConnectionResetError) as exp:
@@ -136,38 +163,36 @@ class RemoteEnvServer(RemoteBase):
             self._sock = None
             raise
 
-    def _on_receive(self, cmd: int):
-        if cmd == Command.RESET:
+    def _on_receive(self, cmd: int) -> int:
+        if cmd == RemoteBase.Command.RESET:
             data = self._env.reset()
-        elif cmd == Command.STEP:
-            data = self.step()
-        elif cmd == Command.ACT_SPEC:
-            data = self.action_spec()
-        elif cmd == Command.OBS_SPEC:
-            data = self.observation_spec()
-        elif cmd == Command.PING:
+        elif cmd == RemoteBase.Command.STEP:
+            data = self._step()
+        elif cmd == RemoteBase.Command.ACT_SPEC:
+            data = self._env.action_spec()
+        elif cmd == RemoteBase.Command.OBS_SPEC:
+            data = self._env.observation_spec()
+        elif cmd == RemoteBase.Command.REW_SPEC:
+            data = self._env.reward_spec()
+        elif cmd == RemoteBase.Command.DISC_SPEC:
+            data = self._env.discount_spec()
+        elif cmd == RemoteBase.Command.PING:
             data = "PING!"
-        elif cmd == Command.CLOSE:
-            self.close()
-            return 0
+        elif cmd == RemoteBase.Command.CLOSE:
+            self._close()
+            return 0  # nowhere to send
         else:
-            msg = f"Unknown command: {cmd}"
+            msg = f"Unknown RemoteBase.Command: {cmd}"
             _log.error(msg)
             raise ValueError(msg)
 
         return self._send(data)
 
-    def step(self):
+    def _step(self) -> dm_env.TimeStep:
         action = self._recv()
         return self._env.step(action)
 
-    def action_spec(self):
-        return self._env.action_spec()
-
-    def observation_spec(self):
-        return self._env.observation_spec()
-
-    def close(self):
+    def _close(self) -> None:
         self._env.close()
         self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
