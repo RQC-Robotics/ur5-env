@@ -4,7 +4,7 @@ import numpy as np
 from dm_env import specs
 from digit_interface import Digit as _Digit
 
-from ur_env import types
+from ur_env import types_ as types
 from ur_env.scene.nodes import base
 
 
@@ -32,7 +32,7 @@ class Digit(base.Node):
         self._digit.set_intensity(intensity)
         self._digit.set_fps(res["fps"].get(str(fps) + "fps", default_fps))
 
-        self._reference_frame = None
+        self._reference_frame: np.ndarray = None
 
     def initialize_episode(self, random_state: np.random.Generator):
         """Reference frame can be used to observe difference."""
@@ -40,8 +40,9 @@ class Digit(base.Node):
         self._reference_frame = self._digit.get_frame().astype(np.float32)
 
     def get_observation(self) -> types.Observation:
+        assert self._reference_frame is not None, "Init episode first."
         frame = self._digit.get_frame()
-        diff = (frame - self._reference_frame) / 255
+        diff = np.float32(frame - self._reference_frame) / 255
         return {
             "sensor": frame,
             "sensor_diff": diff,

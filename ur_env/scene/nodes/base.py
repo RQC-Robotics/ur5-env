@@ -4,7 +4,7 @@ import abc
 
 import numpy as np
 
-from ur_env import types
+from ur_env import types_ as types
 
 
 class Node(abc.ABC):

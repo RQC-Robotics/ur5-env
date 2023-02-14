@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import Tuple
 
 import numpy as np
 from dm_env import specs
 
-from ur_env import types
+from ur_env import types_ as types
 from ur_env.scene.nodes import base
 from .robotiq_gripper import RobotiqGripper
 
@@ -37,21 +37,22 @@ class GripperActionMode(base.Node):
         self._delta = float(self._max_position - self._min_position)
         self._gripper = gripper
 
-        self._obj_status = None
-        self._pos = None
+        self._obj_status: RobotiqGripper.ObjectStatus = None
+        self._pos: int = None
 
-    def move(self, pos):
+    def move(self, pos: int) -> Tuple[int, RobotiqGripper.ObjectStatus]:
         response = self._gripper.move_and_wait_for_pos(
             pos, self._speed, self._force)
         self._pos, self._obj_status = response
         return response
 
-    def initialize_episode(self, random_state: np.random.Generator):
+    def initialize_episode(self, random_state: types.RNG) -> None:
         del random_state
         self._obj_status = RobotiqGripper.ObjectStatus.AT_DEST
         self._pos = self._gripper.get_current_position()
 
     def get_observation(self) -> types.Observation:
+        assert self._pos is not None, "Init episode first."
         normed_pos = (self._pos - self._min_position) / self._delta
 
         def as_np_obs(arg):

@@ -1,4 +1,5 @@
-from typing import MutableMapping, Union
+"""Common type annotations."""
+from typing import MutableMapping
 
 import numpy as np
 from dm_env import specs
@@ -8,5 +9,5 @@ ActionSpec = specs.BoundedArray
 Observation = MutableMapping[str, np.ndarray]
 ObservationSpecs = MutableMapping[str, specs.Array]
 
-RNG = Union[np.random.Generator, int]
+RNG = np.random.Generator
 ActualQ = TCPPose = np.ndarray

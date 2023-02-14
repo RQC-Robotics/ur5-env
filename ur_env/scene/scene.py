@@ -10,7 +10,7 @@ from dashboard_client import DashboardClient
 from rtde_control import RTDEControlInterface
 from rtde_receive import RTDEReceiveInterface
 
-from ur_env import types
+from ur_env import types_ as types
 from ur_env.scene.nodes.base import Node
 from ur_env.scene.nodes.robot import ACTION_MODES
 from ur_env.scene.nodes import RealSense, Kinect
@@ -53,7 +53,7 @@ class Scene:
     """Object that conduct all nodes.
 
     Can be updated by performing an action on it
-    and then queried to obtain observation."""
+    and then queried to obtain an observation."""
 
     def __init__(
             self,

@@ -4,7 +4,7 @@ import numpy as np
 from dm_env import specs
 from pyk4a import PyK4A, config as k4a_config
 
-from ur_env import types
+from ur_env import types_ as types
 from ur_env.scene.nodes import base
 
 _CR = k4a_config.ColorResolution

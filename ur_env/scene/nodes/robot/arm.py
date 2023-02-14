@@ -7,7 +7,7 @@ from dm_env import specs
 from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface as RTDEControl
 
-from ur_env import types, exceptions
+from ur_env import types_ as types, exceptions
 from ur_env.scene.nodes import base
 
 _JOINT_LIMITS = np.float32([2*np.pi, 2*np.pi, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
@@ -69,9 +69,12 @@ class ArmActionMode(base.Node):
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
-        # Action should update at least one of the following estimations.
-        self._estim_tcp = None
-        self._estim_q = None
+        # Action should update at least one of the following estimations
+        #   that are required for safety limits checks.
+        self._estim_tcp: types.TCPPose = None
+        self._estim_q: types.ActualQ = None
+        self._actual_tcp = None
+        self._actual_q = None
 
     def step(self, action: types.Action) -> None:
         self._pre_action(action)
@@ -82,9 +85,14 @@ class ArmActionMode(base.Node):
         del random_state
         self._estim_tcp = None
         self._estim_q = None
+        self._actual_tcp = None
+        self._actual_q = None
 
     def get_observation(self) -> types.Observation:
         return self._observation()
+
+    def observation_spec(self) -> types.ObservationSpecs:
+        return self._observation.observation_spec()
 
     @abc.abstractmethod
     def _estimate_next(self, action: types.Action) -> None:
@@ -110,7 +118,7 @@ class ArmActionMode(base.Node):
             raise RuntimeError("At least one estimation must be done.")
 
     def _post_action(self) -> None:
-        """Checks if a resulting pose is consistent with an estimated."""
+        """Checks if resulting pose is consistent with an estimation."""
         if self._rtde_r.getSafetyMode() > 1:
             raise exceptions.ProtectiveStop(
                 "Safety mode is not in a normal or reduced mode.")
@@ -138,14 +146,11 @@ class ArmActionMode(base.Node):
     def _act_fn(self, action: types.Action) -> bool:
         """Function of RTDEControlInterface to call."""
 
-    def observation_spec(self) -> types.ObservationSpecs:
-        return self._observation.observation_spec()
-
     def _update_state(self) -> None:
         """Action command or next pose estimation
          may require knowledge of the current state.
 
-         It updates every step to hold the most recent state.
+         It updates every step to hold the most recent and accurate state.
         """
         self._actual_tcp = np.asarray(self._rtde_r.getActualTCPPose())
         self._actual_q = np.asarray(self._rtde_r.getActualQ())
@@ -163,6 +168,9 @@ class TCPPosition(ArmActionMode):
             self._estim_tcp = action
         else:
             self._estim_tcp = action + self._actual_tcp
+            # TODO: a_min depends on an installation TCP,
+            #  thus doesn't belong here.
+            self._estim_tcp[2] = np.clip(self._estim_tcp[2], a_min=0.04)
 
     def _act_fn(self, action: types.Action) -> bool:
         return self._rtde_c.moveL(

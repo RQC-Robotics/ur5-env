@@ -1,6 +1,5 @@
 # ur_env
 
----
 ## Description
 
 This repo allows to connect various physical devices to construct RL environments that use dm-env API.
