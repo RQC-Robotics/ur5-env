@@ -1,14 +1,14 @@
 """Base RL entities definition."""
-from typing import Any, Tuple
+from typing import Any, Union
 import abc
 import time
 import logging
 
-import numpy as np
 import dm_env
 from dm_env import specs
+import numpy as np
 
-from ur_env import types, exceptions
+from ur_env import types_ as types, exceptions
 from ur_env.scene import Scene
 
 LOGNAME = "UREnv"
@@ -16,30 +16,25 @@ _log = logging.getLogger(LOGNAME)
 
 
 class Task(abc.ABC):
-    """Defines relevant for RL task methods."""
+    """Defines relevant for RL task methods.
 
-    def __init__(self, rng: types.RNG):
-        if isinstance(rng, int):
-            self._rng = np.random.default_rng(rng)
+    Most of the methods are equivalent to those one in dm_control.composer.Task.
+    """
 
-    def initialize_episode(self, scene: Scene):
+    def initialize_episode(self,
+                           scene: Scene,
+                           random_state: types.RNG
+                           ) -> None:
         """Reset task and prepare for new interactions."""
-        scene.initialize_episode(self._rng)
-
-    @abc.abstractmethod
-    def get_success(self, scene: Scene) -> Tuple[bool, Any]:
-        """Notion of `success` represents the true task goal
-         and can differ from the shaped reward.
-         Returns success flag and optional information.
-         """
+        scene.initialize_episode(random_state)
 
     def get_observation(self, scene: Scene) -> types.Observation:
-        """Returns observation from the environment."""
+        """Return observation from the environment."""
         return scene.get_observation()
 
+    @abc.abstractmethod
     def get_reward(self, scene: Scene) -> float:
-        """Returns reward from the environment."""
-        return float(self.get_success(scene)[0])
+        """Return reward from the environment."""
 
     def get_termination(self, scene: Scene) -> bool:
         """If the episode must terminate."""
@@ -62,41 +57,54 @@ class Task(abc.ABC):
     def discount_spec(self) -> specs.BoundedArray:
         return specs.BoundedArray((), float, 0., 1.)
 
-    def before_step(self, action: Any, scene: Scene):
-        """Pre action step."""
-        # Reconnection problem.
-        # https://gitlab.com/sdurobotics/ur_rtde/-/issues/102
-        rtde_c, rtde_r, dashboard = scene.robot_interfaces
-        if not rtde_r.isConnected():
-            rtde_r.reconnect()
-        if not rtde_c.isConnected():
-            rtde_c.reconnect()
+    @abc.abstractmethod
+    def before_step(self,
+                    scene: Scene,
+                    action: types.Action,
+                    random_state: types.RNG
+                    ) -> None:
+        """Preprocess the action (np.array -> dict) and advance the scene."""
 
-    def after_step(self, scene: Scene):
+    def after_step(self,
+                   scene: Scene,
+                   random_state: types.RNG
+                   ) -> None:
         """Post action step."""
         rtde_c, rtde_r, dashboard = scene.robot_interfaces
-        is_running = rtde_r.getRobotMode() == 7
-        if rtde_r.isProtectiveStopped() or not is_running:
-            _log.warning("Protective stop triggered.")
+        not_running = rtde_r.getRobotMode() != 7
+        if rtde_r.isProtectiveStopped() or not_running:
+            now = time.strftime("%H:%M:%S", time.localtime())
+            _log.warning(f"Protective stop triggered {now}.")
             time.sleep(6)  # Unlock can only happen after 5 sec. delay
             dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
             rtde_c.reuploadScript()
-
-    def preprocess_action(self, action: Any, scene: Scene) -> types.Action:
-        """Use to prepare compatible with the scene action."""
-        return action
 
 
 class Environment:
     """Ordinary RL environment."""
 
     def __init__(self,
+                 random_state: Union[types.RNG, int],
                  scene: Scene,
                  task: Task,
                  time_limit: int = float("inf"),
                  max_violations_num: int = 1
-                 ):
+                 ) -> None:
+        """
+        Args:
+            random_state: stateful rng for a scene and a task.
+            scene: physical robot setup.
+            task: RL task implementation.
+            time_limit: maximum number of interactions before episode truncation.
+            max_violations_num: max. number of suppressed exceptions until
+                early episode termination.
+                Critical exceptions still will be raised on a first occurrence.
+        """
+        if isinstance(random_state, int):
+            random_state = np.random.default_rng(random_state)
+        self._rng = random_state
+
         self._scene = scene
         self._task = task
 
@@ -109,14 +117,14 @@ class Environment:
         self._prev_obs = None
 
     def reset(self) -> dm_env.TimeStep:
-        """Reset episode"""
+        """Reset episode."""
         self._step_count = 0
         self._violations = 0
 
         success_init = False
         while not success_init:
             try:
-                self._task.initialize_episode(self._scene)
+                self._task.initialize_episode(self._scene, self._rng)
             except exceptions.RTDEError as exp:
                 _log.warning(exp)
                 self._violations += 1
@@ -132,9 +140,7 @@ class Environment:
     def step(self, action:  Any) -> dm_env.TimeStep:
         """Perform an action and update environment."""
         try:
-            self._task.before_step(action, self._scene)
-            action = self._task.preprocess_action(action, self._scene)
-            self._scene.step(action)
+            self._task.before_step(self._scene, action, self._rng)
         except exceptions.RTDEError as exp:
             _log.warning(exp)
             self._violations += 1
@@ -155,7 +161,7 @@ class Environment:
             truncate = self._step_count >= self._time_limit
             self._prev_obs = observation
         finally:
-            self._task.after_step(self._scene)
+            self._task.after_step(self._scene, self._rng)
             self._step_count += 1
 
         if is_terminal:
