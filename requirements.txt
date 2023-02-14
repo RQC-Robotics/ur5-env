@@ -1,5 +1,6 @@
-gym
+digit-interface
 numpy
-ur_rtde
+pyk4a
 pyrealsense2
 ruamel.YAML
+ur_rtde

@@ -1,6 +1,6 @@
 """Client-server connection with a robot."""
-from typing import Tuple, Optional, Any, MutableMapping
-
+from typing import Tuple, Optional, Any
+from enum import IntEnum
 import abc
 import time
 import struct
@@ -8,20 +8,16 @@ import socket
 import pickle
 import logging
 
-import numpy as np
-import gym.spaces
-
-Address = Tuple[str, int]
-DEFAULT_TIMEOUT = 60
-PKG_SIZE = 1 << 16
-
 _log = logging.getLogger(__name__)
 
+Address = Tuple[str, int]
+PKG_SIZE = 8192
 
-class Command:
+
+class Command(IntEnum):
     RESET = 0
-    ACT_SPACE = 1
-    OBS_SPACE = 2
+    ACT_SPEC = 1
+    OBS_SPEC = 2
     STEP = 3
     CLOSE = 4
     PING = 5
@@ -29,7 +25,7 @@ class Command:
 
 class RemoteBase(abc.ABC):
     """Unsafe and inefficient data transmission via pickle."""
-    def __init__(self, address: Optional[Address]):
+    def __init__(self, address: Optional[Address] = None):
         self._sock: socket.socket = None
         if address:
             self.connect(address)
@@ -69,7 +65,6 @@ class RemoteEnvClient(RemoteBase):
 
         try:
             self._sock = socket.socket()
-            # self._sock.settimeout(DEFAULT_TIMEOUT)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
@@ -100,21 +95,19 @@ class RemoteEnvClient(RemoteBase):
         self._send_cmd(Command.CLOSE)
         self._sock.close()
 
-    @property
-    def action_space(self):
-        self._send_cmd(Command.ACT_SPACE)
+    def action_spec(self):
+        self._send_cmd(Command.ACT_SPEC)
         return self._recv()
 
-    @property
-    def observation_space(self):
-        self._send_cmd(Command.OBS_SPACE)
+    def observation_spec(self):
+        self._send_cmd(Command.OBS_SPEC)
         return self._recv()
 
 
 class RemoteEnvServer(RemoteBase):
     """Server side hosting a robot."""
 
-    def __init__(self, env, address: Address):
+    def __init__(self, env, address: Optional[Address] = None):
         self._env = env
         super().__init__(address)
 
@@ -140,6 +133,7 @@ class RemoteEnvServer(RemoteBase):
                 self._on_receive(cmd)
         except (EOFError, KeyboardInterrupt, ConnectionResetError) as exp:
             _log.error("Connection interrupted.", exc_info=exp)
+            self._sock = None
             raise
 
     def _on_receive(self, cmd: int):
@@ -147,15 +141,15 @@ class RemoteEnvServer(RemoteBase):
             data = self._env.reset()
         elif cmd == Command.STEP:
             data = self.step()
-        elif cmd == Command.ACT_SPACE:
-            data = self.action_space()
-        elif cmd == Command.OBS_SPACE:
-            data = self.observation_space()
+        elif cmd == Command.ACT_SPEC:
+            data = self.action_spec()
+        elif cmd == Command.OBS_SPEC:
+            data = self.observation_spec()
         elif cmd == Command.PING:
             data = "PING!"
         elif cmd == Command.CLOSE:
             self.close()
-            return
+            return 0
         else:
             msg = f"Unknown command: {cmd}"
             _log.error(msg)
@@ -167,71 +161,13 @@ class RemoteEnvServer(RemoteBase):
         action = self._recv()
         return self._env.step(action)
 
-    def action_space(self):
-        act_space = self._env.action_space
-        return _convert_specs(act_space)
+    def action_spec(self):
+        return self._env.action_spec()
 
-    def observation_space(self):
-        obs_space = self._env.observation_space
-        return _convert_specs(obs_space)
+    def observation_spec(self):
+        return self._env.observation_spec()
 
     def close(self):
         self._env.close()
         self._sock.shutdown(socket.SHUT_RDWR)
         self._sock.close()
-
-
-class HomogenousBox(gym.spaces.Box):
-    """
-    The main difference is that the lower and upper bounds
-    are represented by one number instead of a full array.
-    This implies limited usage of such an object,
-    but saves memory and, hence, eases pickling.
-    """
-
-    def __init__(self, low: float, high: float, shape=None, dtype=np.float32, seed=None):
-        super().__init__(low, high, shape, dtype, seed)
-
-    def __getstate__(self):
-        return self.low.item(0), self.high.item(0), self.shape, self.dtype, self._np_random
-
-    def __setstate__(self, state):
-        low, high, shape, dtype, random = state
-        lower_bound = np.full(shape, low, dtype)
-        upper_bound = np.full(shape, high, dtype)
-        self.__dict__.update(
-            dtype=dtype,
-            low=lower_bound,
-            high=upper_bound,
-            low_repr=str(low),
-            high_repr=str(high),
-            bounded_below=np.isfinite(lower_bound),
-            bounded_above=np.isfinite(upper_bound),
-            _shape=shape,
-            _np_random=random
-        )
-
-    @classmethod
-    def maybe_convert_box(cls, box):
-        """Tries to convert Box to HommBox if it is possible."""
-        if not isinstance(box, gym.spaces.Box) and not _check_equal_limits(box):
-            return box
-        return cls(box.low.item(0), box.high.item(0), box.shape, box.dtype, box.np_random)
-
-
-def _check_equal_limits(box: gym.spaces.Box):
-    low = box.low
-    high = box.high
-    return np.all(low.item(0) == low) and np.all(high.item(0) == high)
-
-
-def _convert_specs(specs):
-    """Compress gym.spaces.Box if possible."""
-    return specs
-    # TODO: broken
-    if isinstance(specs, MutableMapping):
-        for key, spec in specs.items():
-            specs[key] = HomogenousBox.maybe_convert_box(spec)
-    else:
-        specs = HomogenousBox.maybe_convert_box(specs)
-    return specs
