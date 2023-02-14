@@ -1,3 +1,4 @@
+"""Container for physical devices."""
 from typing import Optional, List, NamedTuple, MutableMapping, Tuple, Dict
 from collections import OrderedDict
 import re
@@ -17,6 +18,8 @@ from ur_env.scene.nodes import RealSense, Kinect
 
 
 class RobotInterfaces(NamedTuple):
+    """Grouped interfaces for convenience."""
+
     rtde_control: RTDEControlInterface
     rtde_receive: RTDEReceiveInterface
     dashboard_client: DashboardClient
@@ -158,7 +161,7 @@ class Scene:
             cfg.frequency,
             variables
         )
-        rtde_c, rtde_r, client = interfaces
+        rtde_c, rtde_r, _ = interfaces
         arm_action_mode = ACTION_MODES[cfg.arm_action_mode](
             rtde_c, rtde_r, schema,
             cfg.arm_speed,

@@ -34,7 +34,7 @@ class PickAndLift(Task):
         scene.rtde_control.moveJ(self._init_q)
 
         pose = scene.rtde_receive.getActualTCPPose()
-        pos, rot = pose[:3], pose[3:]
+        pos, _ = pose[:3], pose[3:]
         self._init_pos = np.asarray(pos)
         scene.gripper.move(scene.gripper.min_position)
 
@@ -60,7 +60,7 @@ class PickAndLift(Task):
         arm, gripper = action[:-1], action[-1]
         pose = scene.rtde_receive.getActualTCPPose()
 
-        arm = np.concatenate([np.zeros(3 - self._dof), arm], dtype=arm.dtype)
+        arm = np.concatenate([np.zeros(3 - self._dof), arm])
         pos = np.array(pose[:3])
 
         # Prevent from exploring too far from the initial pose.
@@ -69,6 +69,6 @@ class PickAndLift(Task):
             arm = np.zeros_like(arm)
 
         scene.step({
-            'arm': np.concatenate([arm, np.zeros(3)], dtype=arm.dtype),
+            'arm': np.concatenate([arm, np.zeros(3)]),
             'gripper': gripper
         })

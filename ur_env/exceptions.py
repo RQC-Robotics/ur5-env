@@ -1,3 +1,6 @@
+"""RTDE related errors and exceptions."""
+
+
 class RTDEError(Exception):
     """Base exception for RTDE interface errors."""
 

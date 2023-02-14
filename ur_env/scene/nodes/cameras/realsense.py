@@ -4,7 +4,7 @@ import numpy as np
 from dm_env import specs
 import pyrealsense2 as rs
 
-from ur_env import types
+from ur_env import types_ as types
 from ur_env.scene.nodes import base
 
 
@@ -95,7 +95,7 @@ class RealSense(base.Node):
         # Wait for an auto calibration and update shapes after processing.
         # Decimation can change depth frame shape.
         for _ in range(5):
-            depth, rgb = self.capture_frameset()
+            depth, _ = self.capture_frameset()
         self._depth_height, self._depth_width =\
             np.asanyarray(depth.get_data()).shape
 

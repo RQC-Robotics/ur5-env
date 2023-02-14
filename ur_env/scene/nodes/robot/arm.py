@@ -1,3 +1,4 @@
+"""UR5e arm."""
 from typing import List, Union
 import abc
 from collections import OrderedDict
@@ -170,7 +171,10 @@ class TCPPosition(ArmActionMode):
             self._estim_tcp = action + self._actual_tcp
             # TODO: a_min depends on an installation TCP,
             #  thus doesn't belong here.
-            self._estim_tcp[2] = np.clip(self._estim_tcp[2], a_min=0.04)
+            self._estim_tcp[2] = np.clip(
+                self._estim_tcp[2],
+                a_min=0.04, a_max=np.inf
+            )
 
     def _act_fn(self, action: types.Action) -> bool:
         return self._rtde_c.moveL(

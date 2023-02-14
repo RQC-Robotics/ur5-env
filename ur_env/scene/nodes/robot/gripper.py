@@ -1,3 +1,4 @@
+"""Robotiq 2f-85 gripper."""
 from typing import Tuple
 
 import numpy as np

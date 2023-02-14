@@ -1,3 +1,4 @@
+"""Azure Kinect."""
 from typing import Tuple
 
 import numpy as np
@@ -81,14 +82,14 @@ def _get_color_shape(cr: _CR) -> Tuple[int, int]:
     # microsoft.github.io/Azure-Kinect-Sensor-SDK/master
     if cr == _CR.RES_720P:
         return 720, 1280
-    elif cr == _CR.RES_1080P:
+    if cr == _CR.RES_1080P:
         return 1080, 1920
-    elif cr == _CR.RES_1440P:
+    if cr == _CR.RES_1440P:
         return 1440, 2560
-    elif cr == _CR.RES_1536P:
+    if cr == _CR.RES_1536P:
         return 1536, 2048
-    elif cr == _CR.RES_2160P:
+    if cr == _CR.RES_2160P:
         return 2160, 3840
-    elif cr == _CR.RES_3072P:
+    if cr == _CR.RES_3072P:
         return 3072, 4096
     raise ValueError(cr)

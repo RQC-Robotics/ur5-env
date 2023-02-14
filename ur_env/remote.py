@@ -24,6 +24,8 @@ class RemoteBase(abc.ABC):
     """
 
     class Command(IntEnum):
+        """Exposed methods enum."""
+
         RESET = 0
         ACT_SPEC = 1
         OBS_SPEC = 2
@@ -79,7 +81,7 @@ class RemoteEnvClient(RemoteBase):
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
-            _log.info(f"Connected to {address}")
+            _log.info(f"Connected to %s", str(address))
         except (socket.timeout, socket.error):
             self._sock = None
             raise
@@ -146,7 +148,7 @@ class RemoteEnvServer(RemoteBase):
             sock.bind(address)
             sock.listen(1)
             self._sock, add = sock.accept()
-            _log.info(f"Connection established: {add}.")
+            _log.info(f"Connection established to %s.", str(address))
         except socket.error:
             self._sock = None
             raise

@@ -52,9 +52,11 @@ class Task(abc.ABC):
         return scene.observation_spec()
 
     def reward_spec(self) -> specs.Array:
+        """Reward is scalar value."""
         return specs.Array((), float)
 
     def discount_spec(self) -> specs.BoundedArray:
+        """Most of the time discount is exactly 0 or 1."""
         return specs.BoundedArray((), float, 0., 1.)
 
     @abc.abstractmethod
@@ -74,7 +76,7 @@ class Task(abc.ABC):
         not_running = rtde_r.getRobotMode() != 7
         if rtde_r.isProtectiveStopped() or not_running:
             now = time.strftime("%H:%M:%S", time.localtime())
-            _log.warning(f"Protective stop triggered {now}.")
+            _log.warning("Protective stop triggered %s.", now)
             time.sleep(6)  # Unlock can only happen after 5 sec. delay
             dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
@@ -166,7 +168,7 @@ class Environment:
 
         if is_terminal:
             return dm_env.termination(reward, observation)
-        elif truncate:
+        if truncate:
             return dm_env.truncation(reward, observation, discount)
         return dm_env.transition(reward, observation, discount)
 
