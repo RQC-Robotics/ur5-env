@@ -1,5 +1,6 @@
 digit-interface
 dm-env
+evdev
 numpy
 pyk4a
 pyrealsense2

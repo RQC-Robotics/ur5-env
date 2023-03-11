@@ -63,8 +63,8 @@ class Scene:
             robot_interfaces: RobotInterfaces,
             *nodes_: Node,
     ) -> None:
-        self._interfaces = robot_interfaces
         _check_for_name_collision(nodes_)
+        self._interfaces = robot_interfaces
         self._nodes = nodes_
         self._node_names = tuple(map(lambda node: node.name, self._nodes))
 
@@ -77,7 +77,7 @@ class Scene:
             if node_action is not None:
                 node.step(node_action)
 
-    def initialize_episode(self, random_state: np.random.Generator):
+    def initialize_episode(self, random_state: np.random.Generator) -> None:
         for node in self._nodes:
             node.initialize_episode(random_state)
 
@@ -98,7 +98,7 @@ class Scene:
             obs_specs.update(_name_mangling(node.name, spec))
         return obs_specs
 
-    def action_spec(self) -> Dict[str, types.ActionSpec]:
+    def action_spec(self) -> MutableMapping[str, types.ActionSpec]:
         """Gathers all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
@@ -122,9 +122,9 @@ class Scene:
         # While making things easier it can cause troubles.
         try:
             idx = self._node_names.index(name)
+            return self._nodes[idx]
         except ValueError as exp:
             raise AttributeError("Scene has no attribute " + name) from exp
-        return self._nodes[idx]
 
     @property
     def rtde_control(self) -> RTDEControlInterface:
@@ -194,7 +194,7 @@ def _name_mangling(node_name, obj):
     return {node_name: obj}
 
 
-def _check_for_name_collision(nodes_: List[Node]):
+def _check_for_name_collision(nodes_: List[Node]) -> None:
     """It is desirable to have different names for nodes."""
     names = list(map(lambda n: n.name, nodes_))
     unique_names = set(names)
@@ -269,7 +269,14 @@ def robot_interfaces_factory(
     if "POWER_OFF" in dashboard.robotmode():
         dashboard.powerOn()
         dashboard.brakeRelease()
-        time.sleep(17)
+        time.sleep(20)
+
+    rtde_r = RTDEReceiveInterface(
+        host,
+        frequency=frequency,
+        variables=variables or []
+    )
+    assert rtde_r.isConnected()
 
     flags = RTDEControlInterface.FLAG_USE_EXT_UR_CAP
     flags |= RTDEControlInterface.FLAG_UPLOAD_SCRIPT
@@ -279,12 +286,5 @@ def robot_interfaces_factory(
         frequency=frequency,
         flags=flags
     )
-    rtde_r = RTDEReceiveInterface(
-        host,
-        frequency=frequency,
-        variables=variables or []
-    )
-    assert rtde_r.isConnected()
     assert rtde_c.isConnected()
-
     return RobotInterfaces(rtde_c, rtde_r, dashboard)

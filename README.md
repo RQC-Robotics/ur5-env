@@ -1,12 +1,10 @@
-# ur_env
-
 ## Description
 
 This repo allows to connect various physical devices to construct RL environments that use dm-env API.
 
 [rqcsuite/](ur_env/rqcsuite): collection of tasks for solving on a robot.
 
-[scene/](ur_env/scene): process all the physical devices.
+[scene/](ur_env/scene): process all physical devices.
 
 - [nodes/](ur_env/scene/nodes): various devices that can provide information or be controlled by an agent. 
   - [cameras/](ur_env/scene/nodes/cameras): vision perception.
@@ -14,6 +12,7 @@ This repo allows to connect various physical devices to construct RL environment
   - [sensors/](ur_env/scene/nodes/sensors): tactile perception.
 - [scene.py](ur_env/scene/scene.py): hold, actuate and poll for observations every connected node.
 
+[teleop/](ur_env/teleop): teleoperation via different controllers. This may require additional permissions like adding $USER to inputs group.
 
 [remote.py](ur_env/remote.py): client and server to establish connection between robot and remote host.
 Can be used standalone with any dm_env.Environment.

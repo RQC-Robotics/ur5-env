@@ -21,8 +21,8 @@ class PickAndLift(Task):
             threshold: reward will not increase after this height.
             init_q: initial joints position.
         """
-        self._init_q = list(init_q)
         assert 0 < dof < 4, "Invalid DOF value."
+        self._init_q = list(init_q)
         self._dof = dof
         self._threshold = threshold
 

@@ -1,83 +1,63 @@
 """End-to-end example."""
+# This is not supposed to be in examples. But I wanted git for the exps.
 from typing import Union
 import re
 import numpy as np
 from PIL import Image
 
-from ur_env.scene import nodes
-from ur_env.scene.scene import Scene, robot_interfaces_factory, load_schema
+from ur_env.scene.scene import Scene, SceneConfig
 from ur_env.rqcsuite import PickAndLift
 from ur_env.environment import Environment
 from ur_env.remote import RemoteEnvServer
 from ur_env import types_ as types
 
-from rltools.dmc_wrappers import ActionRescale
 
-HOST = "10.201.2.179"
-
-# 1. Define interfaces and required nodes.
-# UR5e + 2f-85 + Kinect
-schema, _ = load_schema()
-rtde_c, rtde_r, _ = interfaces = robot_interfaces_factory(
-    host=HOST,
-    frequency=400
-)
-arm = nodes.TCPPosition(
-    rtde_c=rtde_c,
-    rtde_r=rtde_r,
-    schema=schema,
-    speed=.25,
-    acceleration=.6,
-    absolute_mode=False
-)
-gripper = nodes.Discrete(HOST)  # TODO: in a such way naming doesn't look good.
-kinect = nodes.Kinect()
-
-# 2. Create a scene. This is example without SceneConfig usage.
-# Nodes order does matter. Here the arm will be polled and actuated before the gripper.
-scene = Scene(interfaces, arm, gripper, kinect)
-
-
-# 3. PickAndLift task is almost defined. We only change observations.
-# Not using dmc_wrappers here and do filtering by hand.
-
+cfg = SceneConfig(gripper_speed=100, gripper_force=0)
+scene_ = Scene.from_config(SceneConfig)
 _OBS_TYPES = Union[types.Observation, types.ObservationSpecs]
+IMG_KEY = "image"
 
 
 class _PickAndLift(PickAndLift):
     """Learning from proprio + rgbd."""
 
-    IMG_SHAPE = (64, 64)  # the only valid shape for Dreamer family.
-    _MAX_DISTANCE = .1  # prevent from exploring too far
+    IMG_SHAPE = (84, 84)  # the only valid shape for Dreamer family.
+    _MAX_DISTANCE = .4  # prevent from exploring too far
     _FILTER_OBS = re.compile(
         r"pos|object_detected|ActualTCP|ActualQ$|image|depth")
 
     def get_observation(self, scene: Scene) -> types.Observation:
         obs = super().get_observation(scene)
-        rgb = obs["kinect/image"]
-        depth = obs["kinect/depth"]
+        rgb = obs.pop("kinect/image")
+        depth = obs.pop("kinect/depth")
         obs = self._filter(obs)
         rgb = self._img_fn(rgb)
         depth = self._img_fn(depth)
         depth = self._depth_fn(depth)
-        obs["kinect/depth"] = depth[..., np.newaxis]
-        obs["kinect/image"] = rgb
+        obs[IMG_KEY] = np.concatenate([rgb, depth[..., np.newaxis]], -1)
         return obs
 
     def observation_spec(self, scene: Scene) -> types.ObservationSpecs:
         spec = super().observation_spec(scene)
-        img_spec = spec["kinect/image"]
+        img_spec = spec.pop("kinect/image")
+        del spec["kinect/depth"]
         spec = self._filter(spec)
-        spec["kinect/depth"] = img_spec.replace(shape=self.IMG_SHAPE+(1,))
-        spec["kinect/image"] = img_spec.replace(shape=self.IMG_SHAPE+(3,))
+        spec[IMG_KEY] = img_spec.replace(shape=self.IMG_SHAPE+(4,))
         return spec
+
+    def get_reward(self, scene) -> float:
+        obj_picked = scene.gripper.object_detected
+        height = scene.rtde_receive.getActualTCPPose()[2]
+        return float(obj_picked * (height > self._threshold))
+
+    def get_termination(self, scene: Scene) -> bool:
+        return bool(self.get_reward)
 
     def before_step(self, scene, action, random_state):
         del random_state
         arm, gripper = action[:-1], action[-1]
         pose = scene.rtde_receive.getActualTCPPose()
 
-        arm[2] *= scene.gripper.object_detected
         pos = np.array(pose[:3])
 
         # Prevent from exploring too far from the initial pose.
@@ -86,8 +66,8 @@ class _PickAndLift(PickAndLift):
             arm = np.zeros_like(arm)
 
         scene.step({
-            'arm': np.concatenate([arm, np.zeros(3)]),
-            'gripper': gripper
+            "arm": np.concatenate([arm, np.zeros(3)]),
+            "gripper": gripper
         })
 
     def _img_fn(self, img: np.ndarray) -> np.ndarray:
@@ -119,19 +99,18 @@ class _PickAndLift(PickAndLift):
 INIT_Q = [-0.350, -1.452, 2.046, -2.167, 4.712, -0.348]
 task = _PickAndLift(
     dof=3,
-    threshold=.3,  # height in meters after which reward is not increasing -- goal height.
+    threshold=.3,
     init_q=INIT_Q
 )
 
 # 4. Make an environment and expose it.
 env = Environment(
     random_state=0,
-    scene=scene,
+    scene=scene_,
     task=task,
     time_limit=32,
-    max_violations_num=1
+    max_violations_num=3
 )
-env = ActionRescale(env)
 
 address = ("", 5555)
 env = RemoteEnvServer(env, address)
