@@ -12,8 +12,8 @@ from ur_env.remote import RemoteEnvServer
 from ur_env import types_ as types
 
 
-cfg = SceneConfig(gripper_speed=100, gripper_force=0)
-scene_ = Scene.from_config(SceneConfig)
+cfg = SceneConfig(gripper_speed=100, gripper_force=10, arm_absolute_mode=False)
+scene_ = Scene.from_config(cfg)
 _OBS_TYPES = Union[types.Observation, types.ObservationSpecs]
 IMG_KEY = "image"
 
@@ -21,16 +21,16 @@ IMG_KEY = "image"
 class _PickAndLift(PickAndLift):
     """Learning from proprio + rgbd."""
 
-    IMG_SHAPE = (84, 84)  # the only valid shape for Dreamer family.
-    _MAX_DISTANCE = .4  # prevent from exploring too far
+    IMG_SHAPE = (100, 100)  # the only valid shape for Dreamer family.
+    _MAX_DISTANCE = .3  # prevent from exploring too far
     _FILTER_OBS = re.compile(
-        r"pos|object_detected|ActualTCP|ActualQ$|image|depth")
+        r"pos|object_detected|ActualTCPPose|ActualQ$|kinect/image|kinect/depth")
 
     def get_observation(self, scene: Scene) -> types.Observation:
         obs = super().get_observation(scene)
+        obs = self._filter(obs)
         rgb = obs.pop("kinect/image")
         depth = obs.pop("kinect/depth")
-        obs = self._filter(obs)
         rgb = self._img_fn(rgb)
         depth = self._img_fn(depth)
         depth = self._depth_fn(depth)
@@ -39,9 +39,9 @@ class _PickAndLift(PickAndLift):
 
     def observation_spec(self, scene: Scene) -> types.ObservationSpecs:
         spec = super().observation_spec(scene)
+        spec = self._filter(spec)
         img_spec = spec.pop("kinect/image")
         del spec["kinect/depth"]
-        spec = self._filter(spec)
         spec[IMG_KEY] = img_spec.replace(shape=self.IMG_SHAPE+(4,))
         return spec
 
@@ -51,7 +51,7 @@ class _PickAndLift(PickAndLift):
         return float(obj_picked * (height > self._threshold))
 
     def get_termination(self, scene: Scene) -> bool:
-        return bool(self.get_reward)
+        return bool(self.get_reward(scene))
 
     def before_step(self, scene, action, random_state):
         del random_state
@@ -109,7 +109,7 @@ env = Environment(
     scene=scene_,
     task=task,
     time_limit=32,
-    max_violations_num=3
+    max_violations_num=2
 )
 
 address = ("", 5555)

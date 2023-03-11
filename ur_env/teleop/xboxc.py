@@ -36,7 +36,7 @@ class Gamepad:
     In most cases you would like to reimplement .read_input.
     """
 
-    def __init__(self, device="/dev/input/event20") -> None:
+    def __init__(self, device: str = "/dev/input/event20") -> None:
         """Follow evdev instructions to determine correct input file."""
         self._device = InputDevice(device)
         self._mapping = {
@@ -53,6 +53,8 @@ class Gamepad:
         for event in self._device.read_loop():
             if not event.value or event.code == EV_KEY.BTN_TR:
                 continue
-            pos = self._mapping[event.code](event)
-            grip = int(EV_KEY.BTN_TR in self._device.active_keys())
-            return np.float32(pos + [grip])
+            act_fn = self._mapping.get(event.code)
+            if act_fn is not None:
+                pos = self._mapping[event.code](event)
+                grip = int(EV_KEY.BTN_TR in self._device.active_keys())
+                return np.float32(pos + [grip])
