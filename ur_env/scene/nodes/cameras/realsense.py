@@ -69,7 +69,7 @@ class RealSense(base.Node):
 
     def _build(self) -> None:
         """Most of the following is not required at all
-        but still presents here to explore and remind of camera possibilities.
+        but still present here to explore and remind of camera possibilities.
         """
         self._pipeline = rs.pipeline()
         self._config = rs.config()

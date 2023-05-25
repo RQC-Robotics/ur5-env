@@ -98,11 +98,11 @@ class Discrete(GripperActionMode):
 
     def step(self, action: types.Action) -> None:
         self.move(
-            self._max_position if action > 0.5 else self._min_position
+            self._max_position if action > 0. else self._min_position
         )
 
     def action_spec(self) -> types.ActionSpec:
-        return specs.BoundedArray((), float, 0., 1.)
+        return specs.BoundedArray((), float, -1., 1.)
 
 
 class Continuous(GripperActionMode):

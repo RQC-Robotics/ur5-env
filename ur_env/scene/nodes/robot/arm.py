@@ -103,7 +103,7 @@ class ArmActionMode(base.Node):
         """
 
     def _pre_action(self, action: types.Action) -> None:
-        """Checks if an action can be performed safely."""
+        """Checks if the action can be performed safely."""
         self._update_state()
         self._estimate_next(action)
 

@@ -53,8 +53,7 @@ class SceneConfig(NamedTuple):
 
 
 class Scene:
-    """Object that conduct all nodes.
-
+    """Container for nodes.
     Can be updated by performing an action on it
     and then queried to obtain an observation."""
 
@@ -82,7 +81,7 @@ class Scene:
             node.initialize_episode(random_state)
 
     def get_observation(self) -> types.Observation:
-        """Gathers all observations."""
+        """Gather all observations."""
         observations = OrderedDict()
         for node in self._nodes:
             obs = node.get_observation()
@@ -91,7 +90,7 @@ class Scene:
         return observations
 
     def observation_spec(self) -> types.ObservationSpecs:
-        """Gathers all observation specs."""
+        """Gather all observation specs."""
         obs_specs = OrderedDict()
         for node in self._nodes:
             spec = node.observation_spec()
@@ -99,7 +98,7 @@ class Scene:
         return obs_specs
 
     def action_spec(self) -> MutableMapping[str, types.ActionSpec]:
-        """Gathers all action specs."""
+        """Gather all action specs."""
         act_specs = OrderedDict()
         for node in self._nodes:
             act_spec = node.action_spec()
@@ -118,7 +117,7 @@ class Scene:
         dashboard.disconnect()
 
     def __getattr__(self, name: str) -> Node:
-        """Allows to obtain node by its name assuming node name is unique."""
+        """Allow to obtain node by its name assuming node name is unique."""
         # While making things easier it can cause troubles.
         try:
             idx = self._node_names.index(name)
@@ -151,7 +150,7 @@ class Scene:
             cls,
             cfg: SceneConfig
     ) -> "Scene":
-        """Creates scene from the config."""
+        """Create scene from the config."""
         schema, variables = load_schema(cfg.obs_schema)
         variables = None  # Include variables that are needed for status checks.
 
@@ -183,7 +182,7 @@ class Scene:
 
 def _name_mangling(node_name, obj):
     """
-    Prevents key collision between different nodes.
+    Prevent key collision between different nodes.
     But it still can occur if there are at least two equal node names.
     """
     if isinstance(obj, MutableMapping):
@@ -195,7 +194,7 @@ def _name_mangling(node_name, obj):
 
 
 def _check_for_name_collision(nodes_: List[Node]) -> None:
-    """It is desirable to have different names for nodes."""
+    """Node names must be unique."""
     names = list(map(lambda n: n.name, nodes_))
     unique_names = set(names)
     assert len(unique_names) == len(names),\
@@ -204,7 +203,7 @@ def _check_for_name_collision(nodes_: List[Node]) -> None:
 
 def load_schema(path: Optional[str] = None) -> Tuple[OrderedDict, List[str]]:
     """
-    Defines variables that should be transferred between host and robot.
+    Define variables that should be transferred between host and robot.
     Schema should contain observables with theirs shapes and dtypes.
     """
     if path is None:
@@ -227,7 +226,7 @@ def load_schema(path: Optional[str] = None) -> Tuple[OrderedDict, List[str]]:
 
 class _DashboardClient(DashboardClient):
     """
-    Disables commands that don't work reliably or
+    Disable commands that don't work reliably or
     shouldn't be used while env is running.
     """
 
@@ -235,7 +234,8 @@ class _DashboardClient(DashboardClient):
         """
         It is always enough to run single External Control URCap program.
         Switching programs from running remote control
-        results in a deadline error."""
+        results in a deadline error.
+        """
 
     def play(self):
         """

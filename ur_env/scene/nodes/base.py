@@ -8,7 +8,7 @@ from ur_env import types_ as types
 
 
 class Node(abc.ABC):
-    """Describes how device should act and update state.
+    """Describe how device should act and update state.
 
     By default node is uncontrollable.
     """
@@ -19,14 +19,14 @@ class Node(abc.ABC):
         self.__name = name
 
     def step(self, action: types.Action) -> None:
-        """Performs action and update state."""
+        """Perform and action and update state."""
 
     def initialize_episode(self, random_state: np.random.Generator) -> None:
-        """Resets node statistics on the new episode."""
+        """Reset node statistics on the new episode."""
 
     @abc.abstractmethod
     def get_observation(self) -> types.Observation:
-        """Returns an observation from the node."""
+        """Return an observation from the node."""
 
     def action_spec(self) -> Optional[types.ActionSpec]:
         """Action BoundedArray spec or None if node is uncontrollable."""
@@ -37,7 +37,7 @@ class Node(abc.ABC):
 
     @abc.abstractmethod
     def observation_spec(self) -> types.ObservationSpecs:
-        """dm_env.spec observation mapping."""
+        """Specify observations provided by the now."""
 
     @property
     def name(self) -> str:

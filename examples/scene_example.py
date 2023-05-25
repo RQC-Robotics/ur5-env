@@ -9,8 +9,8 @@ schema, variables = load_schema()
 # As in a ur_rtde example we connect to a ursim.
 interfaces = robot_interfaces_factory(
     host="localhost",
-    port=50001,
-    frequency=400,
+    port=50003,
+    frequency=350,
     variables=variables
 )
 

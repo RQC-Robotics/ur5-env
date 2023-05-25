@@ -41,22 +41,23 @@ class Task(abc.ABC):
         return False
 
     def get_discount(self, scene: Scene) -> float:
+        """Reward discounting factor."""
         return 1.0
 
     def action_spec(self, scene: Scene) -> types.ActionSpec:
-        """Task action spec."""
+        """Task action specification."""
         return scene.action_spec()
 
     def observation_spec(self, scene: Scene) -> types.ObservationSpecs:
-        """Task obs spec."""
+        """Task observation specification."""
         return scene.observation_spec()
 
     def reward_spec(self) -> specs.Array:
-        """Reward is scalar value."""
+        """Reward is a scalar value."""
         return specs.Array((), float)
 
     def discount_spec(self) -> specs.BoundedArray:
-        """Most of the time discount is exactly 0 or 1."""
+        """Discounting factor specification."""
         return specs.BoundedArray((), float, 0., 1.)
 
     @abc.abstractmethod
@@ -106,16 +107,13 @@ class Environment:
         if isinstance(random_state, int):
             random_state = np.random.default_rng(random_state)
         self._rng = random_state
-
         self._scene = scene
         self._task = task
-
         self._time_limit = time_limit
-        self._step_count = None
-
         self._max_violations = max_violations_num
+        # Next values are set on an episode init.
+        self._step_count = None
         self._violations = None
-
         self._prev_obs = None
 
     def reset(self) -> dm_env.TimeStep:
@@ -131,6 +129,7 @@ class Environment:
                 _log.warning(exp)
                 self._violations += 1
                 if self._violations >= self._max_violations:
+                    self._prev_obs = None
                     raise exp
             else:
                 success_init = True
