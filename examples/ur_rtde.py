@@ -4,50 +4,48 @@ from rtde_receive import RTDEReceiveInterface
 from dashboard_client import DashboardClient
 
 
-def inspect(obj):
-    print(
-        f"repr: {obj}\n"
-        f"type: {type(obj)}\n"
-        f"len: {len(obj)}\n"
-    )
-
 # Basic functionality can can be tested in a ursim.
-#   universal-robots.com/download/?filters[]=98916
-host: str = "localhost"
-port: int = 50001  # default port
+#   universal-robots.com/download/?filters[]=98916.
+host = "localhost"
+port = 50001  # default port
 
-# Interfaces
+# This package calls robot's RTDE interface from Python via ur_rtde.
+#   sdurobotics.gitlab.io/ur_rtde/
+#   gitlab.com/sdurobotics/ur_rtde
 rtde_r = RTDEReceiveInterface(host)
 rtde_c = RTDEControlInterface(host)
 dashboard = DashboardClient(host)
 dashboard.connect()
 
 # 1. Various checks are available.
-assert dashboard.isInRemoteControl(), "Commands can't be executed remotely."
-assert rtde_r.isConnected() and not rtde_r.isProtectiveStopped()
-assert rtde_c.isConnected() and rtde_c.isSteady() and rtde_c.isProgramRunning()
+assert dashboard.isInRemoteControl()
+assert rtde_r.isConnected()
+assert rtde_c.isProgramRunning()
+assert not rtde_r.isProtectiveStopped()
+assert rtde_c.isSteady()
 
-# Dashboard allows to view and change: safety status, power on/off,
-#   release brake, load program, shutdown robot.
+# Dashboard allows to view and change safety status, power on/off,
+#   release brakes, load program, shutdown robot.
 #   https://www.universal-robots.com/articles/ur/dashboard-server-cb-series-port-29999/
 dashboard.powerOn()
 dashboard.brakeRelease()
 
-# 2. rtde_receive allows to obtain robot state.
+# 2. RTDEReceiveInterface reads robot's state.
 tcp_pose = rtde_r.getActualTCPPose()
 joints_pos = rtde_r.getActualQ()
-list(map(inspect, (tcp_pose, joints_pos)))
+def inspect(obj): print(f"repr: {obj}\ntype: {type(obj)}\nlen: {len(obj)}")
+inspect(tcp_pose); inspect(joints_pos)
 
-# 3. rtde_control serves for sending commands to the robot.
+# 3. RTDEControlInterface serves for sending commands.
 new_pose = tcp_pose
-new_pose[2] += .1  # move TCP 10cm up.
+new_pose[2] += .1  # move TCP 0.1 meters up.
 assert rtde_c.isPoseWithinSafetyLimits(new_pose), "Protective stop will be triggered."
 success = rtde_c.moveL(new_pose)
 
 
-# terminate connection and power off arm.
+# Terminate the connection and power off joints.
 rtde_c.disconnect()
 rtde_r.disconnect()
 dashboard.powerOff()
-# Shutdown arm completely.
+# Shutdown the arm and the polyscope completely.
 dashboard.shutdown()

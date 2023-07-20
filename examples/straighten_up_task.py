@@ -3,11 +3,8 @@ from ur_env.environment import Task
 
 
 class StraightenUp(Task):
-    """
-    Reward is equal to the TCP height.
-    Only robot arm is required.
-    """
-    # Here we will make assumption on the default arm node name.
+    """Reward is equal to a TCP height."""
+    # Here we will reuse the default arm node name.
     _arm_node = "arm"
 
     def __init__(self, initial_pos):
@@ -16,10 +13,10 @@ class StraightenUp(Task):
 
     def initialize_episode(self, scene, random_state):
         super().initialize_episode(scene, random_state)
-        scene.rtde_control.moveJ(self._init_pos)
+        scene.arm.rtde_control.moveJ(self._init_pos)
 
     def get_reward(self, scene):
-        rtde_r = scene.rtde_receive
+        rtde_r = scene.arm.rtde_receive  # scene["arm"] is also possible.
         pos = rtde_r.getActualTCPPose()
         return pos[2]
 

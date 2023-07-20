@@ -14,9 +14,7 @@ class RealSense(base.Node):
     def __init__(self,
                  width: int = 848,
                  height: int = 480,
-                 name: str = "realsense",
                  ) -> None:
-        super().__init__(name)
         self._width = width
         self._height = height
         self._build()

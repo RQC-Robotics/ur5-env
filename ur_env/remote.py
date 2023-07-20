@@ -75,13 +75,12 @@ class RemoteEnvClient(RemoteBase):
     def connect(self, address: Address) -> None:
         if self._sock is not None:
             return
-
         try:
             self._sock = socket.socket()
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
-            _log.info("Connected to %s", str(address))
+            _log.info("Connected to %s" % str(address))
         except (socket.timeout, socket.error):
             self._sock = None
             raise
@@ -126,11 +125,7 @@ class RemoteEnvClient(RemoteBase):
 
 
 class RemoteEnvServer(RemoteBase):
-    """Wrap an env to transfer over socket.
-
-    Only main methods are exposed, so be sure to include
-    all the relevant information in a timestep.
-    """
+    """Expose an environment over a socket."""
 
     def __init__(self,
                  env: dm_env.Environment,
@@ -142,13 +137,12 @@ class RemoteEnvServer(RemoteBase):
     def connect(self, address: Address) -> None:
         if self._sock is not None:
             return
-
         try:
             sock = socket.socket()
             sock.bind(address)
             sock.listen(1)
             self._sock, _ = sock.accept()
-            _log.info("Connection established to %s.", str(address))
+            _log.info("Connection established to %s." % str(address))
         except socket.error:
             self._sock = None
             raise

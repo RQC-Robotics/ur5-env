@@ -1,41 +1,39 @@
 """End-to-end example."""
 from typing import Union
 import re
+
 import numpy as np
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError as exc:
+    _msg = "This example requires PIL additionally."
+    raise ImportError(_msg) from exc
 
 from ur_env.scene import nodes
-from ur_env.scene.scene import Scene, robot_interfaces_factory, load_schema
+from ur_env.scene.scene import Scene
 from ur_env.rqcsuite import PickAndLift
 from ur_env.environment import Environment
 from ur_env.remote import RemoteEnvServer
 from ur_env import types_ as types
 
-from rltools.dmc_wrappers import ActionRescale
-
-HOST = "10.201.2.179"
+HOST = "localhost"  # fill it.
 
 # 1. Define interfaces and required nodes.
 # UR5e + 2f-85 + Kinect
-schema, _ = load_schema()
-rtde_c, rtde_r, _ = interfaces = robot_interfaces_factory(
+arm = nodes.TCPPose(
     host=HOST,
-    frequency=400
-)
-arm = nodes.TCPPosition(
-    rtde_c=rtde_c,
-    rtde_r=rtde_r,
-    schema=schema,
+    port=50001,
+    frequency=350,
     speed=.25,
     acceleration=.6,
     absolute_mode=False
 )
-gripper = nodes.Discrete(HOST)  # TODO: in a such way naming doesn't look good.
+gripper = nodes.DiscreteGripper(HOST)
 kinect = nodes.Kinect()
 
 # 2. Create a scene. This is example without SceneConfig usage.
 # Nodes order does matter. Here the arm will be polled and actuated before the gripper.
-scene = Scene(interfaces, arm, gripper, kinect)
+scene = Scene(arm=arm, gripper=gripper, kinect=kinect)
 
 
 # 3. PickAndLift task is almost defined. We only change observations.
@@ -47,7 +45,7 @@ _OBS_TYPES = Union[types.Observation, types.ObservationSpecs]
 class _PickAndLift(PickAndLift):
     """Learning from proprio + rgbd."""
 
-    IMG_SHAPE = (64, 64)  # the only valid shape for Dreamer family.
+    IMG_SHAPE = (64, 64)
     _MAX_DISTANCE = .1  # prevent from exploring too far
     _FILTER_OBS = re.compile(
         r"pos|object_detected|ActualTCP|ActualQ$|image|depth")
@@ -75,7 +73,7 @@ class _PickAndLift(PickAndLift):
     def before_step(self, scene, action, random_state):
         del random_state
         arm, gripper = action[:-1], action[-1]
-        pose = scene.rtde_receive.getActualTCPPose()
+        pose = scene.arm.rtde_receive.getActualTCPPose()
 
         arm[2] *= scene.gripper.object_detected
         pos = np.array(pose[:3])
@@ -131,7 +129,6 @@ env = Environment(
     time_limit=32,
     max_violations_num=1
 )
-env = ActionRescale(env)
 
 address = ("", 5555)
 env = RemoteEnvServer(env, address)

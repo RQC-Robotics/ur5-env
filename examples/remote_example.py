@@ -1,4 +1,4 @@
-"""A basic example of a remote connection."""
+"""Example of a ur_env.remote connection."""
 import dm_env.specs
 import numpy as np
 
@@ -10,10 +10,7 @@ SHAPE = (24,)
 
 
 class MockEnv(dm_env.Environment):
-    """
-    Only basic dm_env.Environment methods will be exposed to remote client.
-    Be sure to include all the relevant information in a observation.
-    """
+    """Class should be compliant with the dm_env.Environment API."""
     _obs = {KEY: np.zeros(SHAPE)}
 
     def reset(self):

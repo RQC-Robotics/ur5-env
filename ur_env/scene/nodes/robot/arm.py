@@ -1,29 +1,36 @@
 """UR5e arm."""
-from typing import List, Union
 import abc
+import time
+from typing import Optional
 from collections import OrderedDict
 
 import numpy as np
 from dm_env import specs
 from rtde_receive import RTDEReceiveInterface
-from rtde_control import RTDEControlInterface as RTDEControl
+from rtde_control import RTDEControlInterface
+from dashboard_client import DashboardClient
 
 from ur_env import types_ as types, exceptions
 from ur_env.scene.nodes import base
+from ur_env.scene.nodes.robot.rtde_interfaces import (
+    load_schema, make_interfaces
+)
 
-_JOINT_LIMITS = np.float32([2*np.pi, 2*np.pi, np.pi, 2*np.pi, 2*np.pi, 2*np.pi])
+_2pi = 2 * np.pi
+_JOINT_LIMITS = np.float32([_2pi, _2pi, np.pi, _2pi, _2pi, _2pi])
 
 
 class ArmObservation:
-    """Polls receiver multiple times to get all the observations
-     specified in a scheme.
-     """
+    """Calls RTDEReceive sequentially to obtain observations
+    specified in a scheme."""
 
     def __init__(self,
                  rtde_r: RTDEReceiveInterface,
-                 schema: OrderedDict,
+                 schema: Optional[OrderedDict] = None,
                  ) -> None:
         self._rtde_r = rtde_r
+        if schema is None:
+            schema, _ = load_schema()
         self._schema = schema
 
     def __call__(self) -> types.Observation:
@@ -35,9 +42,10 @@ class ArmObservation:
         return obs
 
     def observation_spec(self) -> types.ObservationSpecs:
+        """Provide observation spec from the schema."""
         obs_spec = OrderedDict()
         _types = dict(int=int)
-        # Limits should also be obtained from the schema.
+        # Limits should also be inferred from the schema.
         for key, spec_dict in self._schema.items():
             obs_spec[key] = specs.Array(
                 shape=tuple(spec_dict["shape"]),
@@ -51,22 +59,22 @@ class ArmActionMode(base.Node):
 
     def __init__(
             self,
-            rtde_c: RTDEControl,
-            rtde_r: RTDEReceiveInterface,
-            schema: OrderedDict,
+            host: str,
+            port: int,
+            frequency: int = 350,
+            schema: Optional[OrderedDict] = None,
             speed: float = .25,
             acceleration: float = 1.2,
             absolute_mode: bool = True,
-            name: str = "arm"
     ) -> None:
         """Schema specifies desirable observables: name, shape, dtype.
 
         Absolute flag switches between absolute or relative coordinates change.
+        Interfaces should not be closed by the class. Scene should finalize
+        work instead.
         """
-        super().__init__(name)
-        self._rtde_c = rtde_c
-        self._rtde_r = rtde_r
-        self._observation = ArmObservation(rtde_r, schema)
+        self.interfaces = make_interfaces(host, port, frequency)
+        self._observation = ArmObservation(self.rtde_receive, schema)
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
@@ -106,28 +114,38 @@ class ArmActionMode(base.Node):
         """Checks if the action can be performed safely."""
         self._update_state()
         self._estimate_next(action)
+        rtde_c = self.rtde_control
 
         if self._estim_tcp is not None:
-            if not self._rtde_c.isPoseWithinSafetyLimits(list(self._estim_tcp)):
+            if not rtde_c.isPoseWithinSafetyLimits(list(self._estim_tcp)):
                 raise exceptions.SafetyLimitsViolation(
                     f"Pose safety limits violation: {self._estim_tcp}")
         elif self._estim_q is not None:
-            if not self._rtde_c.isJointsWithinSafetyLimits(list(self._estim_q)):
+            if not rtde_c.isJointsWithinSafetyLimits(list(self._estim_q)):
                 raise exceptions.SafetyLimitsViolation(
                     f"Joints safety limits violation: {self._estim_q}")
         else:
-            raise RuntimeError("At least one estimation must be done.")
+            raise RuntimeError("At least one the safety limits estimation"
+                               " must be done.")
 
     def _post_action(self) -> None:
         """Checks if resulting pose is consistent with an estimation."""
-        if self._rtde_r.getSafetyMode() > 1:
+        rtde_c, rtde_r, dashboard = self.interfaces
+        if rtde_r.getSafetyMode() > 1:
             raise exceptions.ProtectiveStop(
                 "Safety mode is not in a normal or reduced mode.")
 
+        not_running = rtde_r.getRobotMode() != 7
+        if rtde_r.isProtectiveStopped() or not_running:
+            time.sleep(6)  # Unlock can only happen after 5 sec. delay
+            dashboard.closeSafetyPopup()
+            dashboard.unlockProtectiveStop()
+            rtde_c.reuploadScript()
+
         self._update_state()
         if (
-                self._estim_tcp is not None and
-                not np.allclose(self._estim_tcp, self._actual_tcp, atol=.1)
+                self._estim_tcp is not None
+                and not np.allclose(self._estim_tcp, self._actual_tcp, atol=.1)
         ):
             raise exceptions.PoseEstimationError(
                 f"Estimated and Actual pose discrepancy:"
@@ -135,8 +153,8 @@ class ArmActionMode(base.Node):
             )
 
         if (
-            self._estim_q is not None and
-            not np.allclose(self._estim_q, self._actual_q, atol=.1)
+                self._estim_q is not None
+                and not np.allclose(self._estim_q, self._actual_q, atol=.1)
         ):
             raise exceptions.PoseEstimationError(
                 f"Estimated and Actual Q discrepancy:"
@@ -153,11 +171,28 @@ class ArmActionMode(base.Node):
 
          It updates every step to hold the most recent and accurate state.
         """
-        self._actual_tcp = np.asarray(self._rtde_r.getActualTCPPose())
-        self._actual_q = np.asarray(self._rtde_r.getActualQ())
+        self._actual_tcp = np.asarray(self.rtde_receive.getActualTCPPose())
+        self._actual_q = np.asarray(self.rtde_receive.getActualQ())
+
+    def close(self) -> None:
+        self.rtde_control.disconnect()
+        self.rtde_receive.disconnect()
+        self.dashboard.disconnect()
+
+    @property
+    def rtde_receive(self) -> RTDEReceiveInterface:
+        return self.interfaces.rtde_receive
+
+    @property
+    def rtde_control(self) -> RTDEControlInterface:
+        return self.interfaces.rtde_control
+
+    @property
+    def dashboard(self) -> DashboardClient:
+        return self.interfaces.dashboard_client
 
 
-class TCPPosition(ArmActionMode):
+class TCPPose(ArmActionMode):
     """Act on TCPPose(x,y,z,rx,ry,rz) by executing moveL comm.
 
     Absolute mode is specifying if control input is a relative difference or
@@ -171,13 +206,16 @@ class TCPPosition(ArmActionMode):
             self._estim_tcp = action + self._actual_tcp
             # TODO: a_min depends on an installation TCP,
             #  thus doesn't belong here.
-            self._estim_tcp[2] = np.clip(
-                self._estim_tcp[2],
-                a_min=0.04, a_max=np.inf
-            )
+        self._estim_tcp[2] = np.clip(
+            self._estim_tcp[2],
+            a_min=0.04, a_max=np.inf
+        )
+        rot = self._estim_tcp[3:]
+        rot = (rot % _2pi) - np.pi
+        self._estim_tcp[3:] = rot
 
     def _act_fn(self, action: types.Action) -> bool:
-        return self._rtde_c.moveL(
+        return self.rtde_control.moveL(
             pose=list(self._estim_tcp),
             speed=self._speed,
             acceleration=self._acceleration
@@ -185,8 +223,8 @@ class TCPPosition(ArmActionMode):
 
     def action_spec(self) -> types.ActionSpec:
         return specs.BoundedArray(
-            minimum=np.array(3 * [-np.inf] + 3 * [-2*np.pi], dtype=np.float32),
-            maximum=np.array(3 * [np.inf] + 3 * [2*np.pi], dtype=np.float32),
+            minimum=np.array(3 * [-np.inf] + 3 * [-np.pi], dtype=np.float32),
+            maximum=np.array(3 * [np.inf] + 3 * [np.pi], dtype=np.float32),
             shape=(6,),
             dtype=np.float32
         )
@@ -199,14 +237,15 @@ class JointsPosition(ArmActionMode):
         if self._absolute:
             self._estim_q = action
         else:
-
-            self._estim_q = np.clip(action + self._actual_q,
-                                    a_min=-_JOINT_LIMITS,
-                                    a_max=_JOINT_LIMITS
-                                    )
+            self._estim_q = action + self._actual_q
+        self._estim_q = np.clip(
+            self._estim_q,
+            a_min=-_JOINT_LIMITS,
+            a_max=_JOINT_LIMITS
+        )
 
     def _act_fn(self, action: types.Action) -> bool:
-        return self._rtde_c.moveJ(
+        return self.rtde_control.moveJ(
             q=list(self._estim_q),
             speed=self._speed,
             acceleration=self._acceleration
@@ -220,39 +259,3 @@ class JointsPosition(ArmActionMode):
             shape=lim.shape,
             dtype=lim.dtype
         )
-
-
-def fracture_trajectory(
-        begin: Union[List[float], np.ndarray],
-        end: Union[List[float], np.ndarray],
-        waypoints: int = 1,
-        speed: Union[float, List[float]] = 0.25,
-        acceleration: Union[float, List[float]] = 0.5,
-        blend: Union[float, List[float]] = .0,
-) -> List[List[float]]:
-    """Splits trajectory to equidistant (per dimension) intermediate waypoints.
-
-    Speed, accel. and blend are concatenated to waypoints, so
-    command signature for path differs from move to pose.
-    """
-    if waypoints == 1:
-        return [list(end) + [speed, acceleration, blend]]
-
-    def _transform_params(param):
-        numeric = isinstance(param, (float, int))
-        assert numeric or len(param) == waypoints,\
-            f"Wrong trajectory specification: {param}."
-
-        if numeric:
-            return np.full(waypoints, param)
-        return np.asarray(param)
-
-    params = np.stack(
-        list(map(_transform_params, (speed, acceleration, blend))),
-        axis=-1
-    )
-    begin, end = map(np.asanyarray, (begin, end))
-    path = np.linspace(begin, end, num=waypoints)
-    path = np.concatenate([path, params], axis=-1)
-
-    return list(map(np.ndarray.tolist, path))

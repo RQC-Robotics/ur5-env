@@ -1,7 +1,6 @@
 """Base RL entities definition."""
 from typing import Any, Union
 import abc
-import time
 import logging
 
 import dm_env
@@ -29,7 +28,7 @@ class Task(abc.ABC):
         scene.initialize_episode(random_state)
 
     def get_observation(self, scene: Scene) -> types.Observation:
-        """Return observation from the environment."""
+        """Return task specific observation from the environment."""
         return scene.get_observation()
 
     @abc.abstractmethod
@@ -73,15 +72,6 @@ class Task(abc.ABC):
                    random_state: types.RNG
                    ) -> None:
         """Post action step."""
-        rtde_c, rtde_r, dashboard = scene.robot_interfaces
-        not_running = rtde_r.getRobotMode() != 7
-        if rtde_r.isProtectiveStopped() or not_running:
-            now = time.strftime("%H:%M:%S", time.localtime())
-            _log.warning("Protective stop triggered %s.", now)
-            time.sleep(6)  # Unlock can only happen after 5 sec. delay
-            dashboard.closeSafetyPopup()
-            dashboard.unlockProtectiveStop()
-            rtde_c.reuploadScript()
 
 
 class Environment:
@@ -98,23 +88,20 @@ class Environment:
         Args:
             random_state: stateful rng for a scene and a task.
             scene: physical robot setup.
-            task: RL task implementation.
+            task: RL task definition.
             time_limit: maximum number of interactions before episode truncation.
             max_violations_num: max. number of suppressed exceptions until
-                early episode termination.
+                early episode termination occurs.
                 Critical exceptions still will be raised on a first occurrence.
         """
-        if isinstance(random_state, int):
-            random_state = np.random.default_rng(random_state)
-        self._rng = random_state
+        self._rng = np.random.default_rng(random_state)
         self._scene = scene
         self._task = task
-        self._time_limit = time_limit
-        self._max_violations = max_violations_num
-        # Next values are set on an episode init.
-        self._step_count = None
-        self._violations = None
-        self._prev_obs = None
+        self.time_limit = time_limit
+        self.max_violations = max_violations_num
+        self._step_count = 0
+        self._violations = 0
+        self._prev_obs: types.Observation = None
 
     def reset(self) -> dm_env.TimeStep:
         """Reset episode."""
@@ -128,7 +115,7 @@ class Environment:
             except exceptions.RTDEError as exp:
                 _log.warning(exp)
                 self._violations += 1
-                if self._violations >= self._max_violations:
+                if self._violations >= self.max_violations:
                     self._prev_obs = None
                     raise exp
             else:
@@ -149,17 +136,16 @@ class Environment:
             discount = self._task.get_discount(self._scene)
             reward = 0.
             truncate = False
-
             is_terminal = \
                 isinstance(exp, exceptions.CriticalRTDEError) \
-                or self._violations >= self._max_violations
+                or self._violations >= self.max_violations
         else:
             observation = self._task.get_observation(self._scene)
             reward = self._task.get_reward(self._scene)
             discount = self._task.get_discount(self._scene)
             is_terminal = self._task.get_termination(self._scene)
 
-            truncate = self._step_count >= self._time_limit
+            truncate = self._step_count >= self.time_limit
             self._prev_obs = observation
         finally:
             self._task.after_step(self._scene, self._rng)

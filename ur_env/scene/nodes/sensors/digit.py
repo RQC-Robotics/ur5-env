@@ -23,7 +23,6 @@ class Digit(base.Node):
         Serial can be found with digit_interface.DigitHandler.
         FPS option vary per resolution: 30 or 15 for VGA; 60 or 30 for QVGA.
         """
-        super().__init__(name=name)
         res = _Digit.STREAMS[resolution].copy()
         default_fps = 30 if resolution == "VGA" else 60
 

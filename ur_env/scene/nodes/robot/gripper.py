@@ -19,17 +19,13 @@ class GripperActionMode(base.Node):
             force: int = 100,
             speed: int = 100,
             absolute_mode: bool = True,
-            name: str = "gripper"
     ) -> None:
         """Pos, speed and force are constrained to [0, 255]."""
-        super().__init__(name)
         gripper = RobotiqGripper()
         gripper.connect(host, port)
         gripper.activate()
 
-        def rescale(x):
-            return int(255 * x / 100.)
-
+        def rescale(x): return int(255 * x / 100.)
         self._speed = rescale(speed)
         self._force = rescale(force)
         self._absolute = absolute_mode
@@ -55,17 +51,13 @@ class GripperActionMode(base.Node):
     def get_observation(self) -> types.Observation:
         assert self._pos is not None, "Init episode first."
         normed_pos = (self._pos - self._min_position) / self._delta
-
-        def as_np_obs(arg):
-            arg = np.float32(arg)
-            return np.atleast_1d(arg)
-
         obs = {
             "is_closed": self._gripper.is_closed(),
             "pos": normed_pos,
             "object_detected": self.object_detected,
         }
-        return {k: as_np_obs(v) for k, v in obs.items()}
+        def as_np(x): return np.atleast_1d(x).astype(np.float32)
+        return {k: as_np(v) for k, v in obs.items()}
 
     def observation_spec(self) -> types.ObservationSpecs:
         return {
@@ -86,26 +78,25 @@ class GripperActionMode(base.Node):
     def object_detected(self) -> bool:
         return self._obj_status in (
             RobotiqGripper.ObjectStatus.STOPPED_INNER_OBJECT,
-            RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
+            # RobotiqGripper.ObjectStatus.STOPPED_OUTER_OBJECT
         )
 
     def __getattr__(self, name):
         return getattr(self._gripper, name)
 
 
-class Discrete(GripperActionMode):
+class DiscreteGripper(GripperActionMode):
     """Fully open or close gripper."""
 
     def step(self, action: types.Action) -> None:
-        self.move(
-            self._max_position if action > 0. else self._min_position
-        )
+        pos = self.max_position if action > 0. else self.min_position
+        self.move(pos)
 
     def action_spec(self) -> types.ActionSpec:
         return specs.BoundedArray((), float, -1., 1.)
 
 
-class Continuous(GripperActionMode):
+class ContinuousGripper(GripperActionMode):
     """Fine-grained control over a gripper."""
 
     def step(self, action: types.Action) -> None:

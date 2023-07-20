@@ -25,28 +25,21 @@ _DEFAULT_CONFIG = k4a_config.Config(
 class Kinect(base.Node):
     """Azure Kinect camera."""
 
+    _depth_scale = np.float32(1e-3)
+
     def __init__(self,
                  config: k4a_config.Config = _DEFAULT_CONFIG,
-                 name: str = "kinect",
                  ) -> None:
         """Be sure when using high color_res format or FPS
         since w/o GPU low latency depth map processing may be inaccessible.
         """
-        super().__init__(name)
-        # Run calibrations.
-
+        # TODO: add calibration.
         self._config = config
         self._k4a = PyK4A(config)
         self._k4a.start()
-        self._depth_scale = np.float32(1e-3)
 
     def get_observation(self) -> types.Observation:
-        """
-        Captures an observation from the camera.
-        Default color_format is BGRA32, which may require transformation to RGB.
-            Conversion can be done with a [:, :, 2::-1] slice.
-        Depth map and point cloud are transformed to match color_format shape.
-        """
+        """Captures an observation from the camera."""
         capture = self._k4a.get_capture()
         return {
             "image": capture.color[:, :, 2::-1],
