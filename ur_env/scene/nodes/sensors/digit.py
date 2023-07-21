@@ -48,7 +48,7 @@ class Digit(base.Node):
             "sensor_diff": diff,
         }
 
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         res = self._digit.resolution
         shape = (res["width"], res["height"])
         return {

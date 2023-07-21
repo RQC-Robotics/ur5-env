@@ -47,7 +47,7 @@ class Task(abc.ABC):
         """Task action specification."""
         return scene.action_spec()
 
-    def observation_spec(self, scene: Scene) -> types.ObservationSpecs:
+    def observation_spec(self, scene: Scene) -> types.ObservationSpec:
         """Task observation specification."""
         return scene.observation_spec()
 
@@ -112,12 +112,12 @@ class Environment:
         while not success_init:
             try:
                 self._task.initialize_episode(self._scene, self._rng)
-            except exceptions.RTDEError as exp:
-                _log.warning(exp)
+            except exceptions.RTDEError as exc:
+                _log.warning(exc)
                 self._violations += 1
                 if self._violations >= self.max_violations:
                     self._prev_obs = None
-                    raise exp
+                    raise exc
             else:
                 success_init = True
 
@@ -129,15 +129,15 @@ class Environment:
         """Perform an action and update environment."""
         try:
             self._task.before_step(self._scene, action, self._rng)
-        except exceptions.RTDEError as exp:
-            _log.warning(exp)
+        except exceptions.RTDEError as exc:
+            _log.warning(exc)
             self._violations += 1
             observation = self._prev_obs
             discount = self._task.get_discount(self._scene)
             reward = 0.
             truncate = False
             is_terminal = \
-                isinstance(exp, exceptions.CriticalRTDEError) \
+                isinstance(exc, exceptions.CriticalRTDEError) \
                 or self._violations >= self.max_violations
         else:
             observation = self._task.get_observation(self._scene)
@@ -165,7 +165,7 @@ class Environment:
     def task(self) -> Task:
         return self._task
 
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         return self._task.observation_spec(self._scene)
 
     def action_spec(self) -> types.ActionSpec:

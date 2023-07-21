@@ -24,7 +24,7 @@ class Node(abc.ABC):
         """Return an observation from the node."""
 
     @abc.abstractmethod
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         """Specify observations provided by the node."""
 
     def action_spec(self) -> Optional[types.ActionSpec]:

@@ -40,7 +40,7 @@ class Scene:
             observations.update(obs)
         return observations
 
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         """Gather all observation specs."""
         obs_specs = OrderedDict()
         for name, node in self._nodes.items():

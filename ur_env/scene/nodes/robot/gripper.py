@@ -59,7 +59,7 @@ class GripperActionMode(base.Node):
         def as_np(x): return np.atleast_1d(x).astype(np.float32)
         return {k: as_np(v) for k, v in obs.items()}
 
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         return {
             "is_closed": specs.BoundedArray((1,), np.float32, 0, 1),
             "pos": specs.BoundedArray((1,), np.float32, 0, 1),

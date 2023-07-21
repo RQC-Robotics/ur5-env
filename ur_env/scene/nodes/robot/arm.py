@@ -41,7 +41,7 @@ class ArmObservation:
             obs[key] = np.asarray(value)
         return obs
 
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         """Provide observation spec from the schema."""
         obs_spec = OrderedDict()
         _types = dict(int=int)
@@ -60,7 +60,7 @@ class ArmActionMode(base.Node):
     def __init__(
             self,
             host: str,
-            port: int,
+            port: int = 50003,
             frequency: int = 350,
             schema: Optional[OrderedDict] = None,
             speed: float = .25,
@@ -100,7 +100,7 @@ class ArmActionMode(base.Node):
     def get_observation(self) -> types.Observation:
         return self._observation()
 
-    def observation_spec(self) -> types.ObservationSpecs:
+    def observation_spec(self) -> types.ObservationSpec:
         return self._observation.observation_spec()
 
     @abc.abstractmethod
