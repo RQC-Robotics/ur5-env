@@ -54,3 +54,7 @@ class Gamepad:
             if act_fn is not None and event.value:
                 action = act_fn(event.value) if callable(act_fn) else act_fn
                 return action
+
+    @property
+    def device(self) -> InputDevice:
+        return self._device

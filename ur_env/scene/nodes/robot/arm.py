@@ -203,8 +203,14 @@ class TCPPose(ArmActionMode):
         if self._absolute:
             self._estim_tcp = action
         else:
-            pos = self.rtde_control.poseTrans(self._actual_tcp, action)
-            self._estim_tcp = np.asarray(pos, dtype=action.dtype)
+            pos, rot = np.split(action, [3])
+            pose = self.rtde_control.poseTrans(
+                self._actual_tcp,
+                np.concatenate([np.zeros_like(pos), rot])
+            )
+            pose = np.asarray(pose)
+            pose[:3] += pos
+            self._estim_tcp = pose
         # TODO: a_min depends on an installation TCP,
         #  thus doesn't belong here.
         self._estim_tcp[2] = np.clip(
