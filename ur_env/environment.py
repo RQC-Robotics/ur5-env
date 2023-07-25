@@ -1,4 +1,4 @@
-"""Base RL entities definition."""
+"""Base RL abstractions."""
 from typing import Any, Union
 import abc
 import logging
@@ -15,7 +15,7 @@ _log = logging.getLogger(LOGNAME)
 
 
 class Task(abc.ABC):
-    """Defines relevant for RL task methods.
+    """Defines relevant for a task methods.
 
     Most of the methods are equivalent to those one in dm_control.composer.Task.
     """
@@ -24,23 +24,24 @@ class Task(abc.ABC):
                            scene: Scene,
                            random_state: types.RNG
                            ) -> None:
-        """Reset task and prepare for new interactions."""
+        """Reset the scene and prepare for new interactions."""
         scene.initialize_episode(random_state)
 
     def get_observation(self, scene: Scene) -> types.Observation:
-        """Return task specific observation from the environment."""
+        """Return task specific observation from the scene."""
         return scene.get_observation()
 
     @abc.abstractmethod
     def get_reward(self, scene: Scene) -> float:
-        """Return reward from the environment."""
+        """Calculate the reward signal given the physical state."""
 
     def get_termination(self, scene: Scene) -> bool:
-        """If the episode must terminate."""
+        """Determines whether the episode should terminate
+         given the scene state."""
         return False
 
     def get_discount(self, scene: Scene) -> float:
-        """Reward discounting factor."""
+        """Calculate the reward discount factor given the physical state."""
         return 1.0
 
     def action_spec(self, scene: Scene) -> types.ActionSpec:
@@ -62,10 +63,10 @@ class Task(abc.ABC):
     @abc.abstractmethod
     def before_step(self,
                     scene: Scene,
-                    action: types.Action,
+                    action: Any,
                     random_state: types.RNG
                     ) -> None:
-        """Preprocess the action (np.array -> dict) and advance the scene."""
+        """Preprocess the action (Any -> dict) and advance the scene."""
 
     def after_step(self,
                    scene: Scene,
@@ -86,7 +87,7 @@ class Environment:
                  ) -> None:
         """
         Args:
-            random_state: stateful rng for a scene and a task.
+            random_state: np.random.Generator state.
             scene: physical robot setup.
             task: RL task definition.
             time_limit: maximum number of interactions before episode truncation.
@@ -101,13 +102,11 @@ class Environment:
         self.max_violations = max_violations_num
         self._step_count = 0
         self._violations = 0
-        self._prev_obs: types.Observation = None
 
     def reset(self) -> dm_env.TimeStep:
         """Reset episode."""
         self._step_count = 0
         self._violations = 0
-
         success_init = False
         while not success_init:
             try:
@@ -116,40 +115,32 @@ class Environment:
                 _log.warning(exc)
                 self._violations += 1
                 if self._violations >= self.max_violations:
-                    self._prev_obs = None
                     raise exc
             else:
                 success_init = True
-
         obs = self._task.get_observation(self._scene)
-        self._prev_obs = obs
         return dm_env.restart(obs)
 
     def step(self, action:  Any) -> dm_env.TimeStep:
-        """Perform an action and update environment."""
+        """Perform an action and update the scene."""
         try:
             self._task.before_step(self._scene, action, self._rng)
         except exceptions.RTDEError as exc:
             _log.warning(exc)
             self._violations += 1
-            observation = self._prev_obs
-            discount = self._task.get_discount(self._scene)
             reward = 0.
-            truncate = False
             is_terminal = \
                 isinstance(exc, exceptions.CriticalRTDEError) \
                 or self._violations >= self.max_violations
         else:
-            observation = self._task.get_observation(self._scene)
             reward = self._task.get_reward(self._scene)
-            discount = self._task.get_discount(self._scene)
             is_terminal = self._task.get_termination(self._scene)
-
-            truncate = self._step_count >= self.time_limit
-            self._prev_obs = observation
         finally:
-            self._task.after_step(self._scene, self._rng)
             self._step_count += 1
+            truncate = self._step_count >= self.time_limit
+            observation = self._task.get_observation(self._scene)
+            discount = self._task.get_discount(self._scene)
+            self._task.after_step(self._scene, self._rng)
 
         if is_terminal:
             return dm_env.termination(reward, observation)

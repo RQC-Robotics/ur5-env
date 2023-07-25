@@ -13,6 +13,8 @@ class Gamepad:
     """
 
     class EV_KEY(IntEnum):
+        """Digital inputs."""
+
         BTN_A = 304
         BTN_B = 305
         BTN_X = 307
@@ -22,6 +24,8 @@ class Gamepad:
         BTN_START = 315
 
     class EV_ABS(IntEnum):
+        """Analog inputs."""
+
         ABS_X = 0  # i32
         ABS_Y = 1  # i32
         ABS_Z = 2  # 0 1023

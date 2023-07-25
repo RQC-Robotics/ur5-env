@@ -73,6 +73,7 @@ class RemoteEnvClient(RemoteBase):
     """
 
     def connect(self, address: Address) -> None:
+        """Connect to a server."""
         if self._sock is not None:
             return
         try:
@@ -86,6 +87,7 @@ class RemoteEnvClient(RemoteBase):
             raise
 
     def ping(self) -> float:
+        """Measure connection latency."""
         start = time.time()
         self._send_cmd(RemoteBase.Command.PING)
         data = self._recv()
@@ -94,32 +96,39 @@ class RemoteEnvClient(RemoteBase):
         _log.info(msg)
         return delta
 
-    def step(self, action) -> dm_env.TimeStep:
+    def step(self, action: Any) -> dm_env.TimeStep:
+        """Execute an action."""
         self._send_cmd(RemoteBase.Command.STEP)
         self._send(action)
         return self._recv()
 
     def reset(self) -> dm_env.TimeStep:
+        """Reset an episode."""
         self._send_cmd(RemoteBase.Command.RESET)
         return self._recv()
 
     def close(self) -> None:
+        """Terminate connection."""
         self._send_cmd(RemoteBase.Command.CLOSE)
         self._sock.close()
 
     def action_spec(self) -> dm_env.specs.Array:
+        """Env action specification."""
         self._send_cmd(RemoteBase.Command.ACT_SPEC)
         return self._recv()
 
     def observation_spec(self) -> dm_env.specs.Array:
+        """Env observation specification."""
         self._send_cmd(RemoteBase.Command.OBS_SPEC)
         return self._recv()
 
     def reward_spec(self) -> dm_env.specs.Array:
+        """Env reward specification."""
         self._send_cmd(RemoteBase.Command.REW_SPEC)
         return self._recv()
 
     def discount_spec(self) -> dm_env.specs.BoundedArray:
+        """Env reward discount factor specification."""
         self._send_cmd(RemoteBase.Command.DISC_SPEC)
         return self._recv()
 
@@ -135,6 +144,7 @@ class RemoteEnvServer(RemoteBase):
         super().__init__(address)
 
     def connect(self, address: Address) -> None:
+        """Listen for a client."""
         if self._sock is not None:
             return
         try:

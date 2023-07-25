@@ -32,4 +32,4 @@ class Node(abc.ABC):
         return None
 
     def close(self) -> None:
-        """Finalize work: terminate connection, close opened stream, etc."""
+        """Finalize work: terminate connection, release resources, etc."""

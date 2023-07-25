@@ -203,16 +203,14 @@ class TCPPose(ArmActionMode):
         if self._absolute:
             self._estim_tcp = action
         else:
-            self._estim_tcp = action + self._actual_tcp
-            # TODO: a_min depends on an installation TCP,
-            #  thus doesn't belong here.
+            pos = self.rtde_control.poseTrans(self._actual_tcp, action)
+            self._estim_tcp = np.asarray(pos, dtype=action.dtype)
+        # TODO: a_min depends on an installation TCP,
+        #  thus doesn't belong here.
         self._estim_tcp[2] = np.clip(
             self._estim_tcp[2],
             a_min=0.04, a_max=np.inf
         )
-        rot = self._estim_tcp[3:]
-        rot = (rot % _2pi) - np.pi
-        self._estim_tcp[3:] = rot
 
     def _act_fn(self, action: types.Action) -> bool:
         return self.rtde_control.moveL(

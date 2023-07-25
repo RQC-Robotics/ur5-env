@@ -1,3 +1,4 @@
+"""Intel RealSense via pyrealsense2."""
 from typing import List, Tuple
 
 import numpy as np
