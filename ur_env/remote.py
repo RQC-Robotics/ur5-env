@@ -55,9 +55,9 @@ class RemoteBase(abc.ABC):
     def _recv(self) -> Any:
         size = self._sock.recv(4)
         size = struct.unpack("I", size)[0]
-        pkgs = size // PKG_SIZE + 1
-        data = (self._sock.recv(PKG_SIZE) for _ in range(pkgs))
-        data = b"".join(data)
+        data = bytearray()
+        while len(data) < size:
+            data.extend(self._sock.recv(PKG_SIZE))
         return pickle.loads(data)
 
     def _send(self, data: Any) -> int:
