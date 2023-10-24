@@ -1,5 +1,5 @@
 """Robotiq 2f-85 gripper."""
-from typing import Tuple
+from typing import Tuple, Optional
 
 import numpy as np
 from dm_env import specs
@@ -18,19 +18,24 @@ class GripperActionMode(base.Node):
             port: int = 63352,
             force: int = 100,
             speed: int = 100,
+            pos_limits: Optional[Tuple[int, int]] = None,
             absolute_mode: bool = True,
     ) -> None:
         """Pos, speed and force are constrained to [0, 255]."""
         gripper = RobotiqGripper()
         gripper.connect(host, port)
-        gripper.activate()
 
         def rescale(x): return int(255 * x / 100.)
         self._speed = rescale(speed)
         self._force = rescale(force)
         self._absolute = absolute_mode
-        self._max_position = gripper.get_max_position()
-        self._min_position = gripper.get_min_position()
+        if pos_limits is None:
+            gripper.activate(auto_calibrate=True)
+            self._max_position = gripper.get_max_position()
+            self._min_position = gripper.get_min_position()
+        else:
+            gripper.activate(auto_calibrate=False)
+            self._max_position, self._min_position = pos_limits
         self._delta = float(self._max_position - self._min_position)
         self._gripper = gripper
 

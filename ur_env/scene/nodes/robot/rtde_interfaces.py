@@ -1,10 +1,7 @@
 """UR5 Real-Time Data Exchange utils."""
-import os
-import re
 import time
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import NamedTuple
 
-from ruamel import yaml
 
 from rtde_receive import RTDEReceiveInterface
 from rtde_control import RTDEControlInterface
@@ -46,7 +43,6 @@ def make_interfaces(
         host: str,
         port: int = 50003,
         frequency: float = -1.,
-        variables: Optional[List[str]] = None
 ) -> RobotInterfaces:
     """Interfaces to communicate with the robot.
 
@@ -66,7 +62,6 @@ def make_interfaces(
     rtde_r = RTDEReceiveInterface(
         host,
         frequency=frequency,
-        variables=variables or []
     )
     assert rtde_r.isConnected()
 
@@ -80,27 +75,3 @@ def make_interfaces(
     )
     assert rtde_c.isConnected()
     return RobotInterfaces(rtde_c, rtde_r, dashboard)
-
-
-def load_schema(path: Optional[str] = None) -> Tuple[Dict, List[str]]:
-    """Define variables that should be transferred between host and robot.
-
-    Schema should contain observables with theirs shapes and dtypes.
-    If no path is provided, default schema will be used.
-    """
-    if path is None:
-        path = os.path.dirname(__file__)
-        path = os.path.join(path, "observations_schema.yaml")
-        path = os.path.abspath(path)
-
-    with open(path, encoding="utf-8") as file:
-        schema = yaml.safe_load(file)
-
-    def _as_rtde_variable(variable):
-        for match in re.findall(r"[A-Z]", variable):
-            variable = variable.replace(match, "_"+match.lower())
-        variable = variable.replace("t_c_p", "TCP")
-        return variable[1:]
-
-    variables = list(map(_as_rtde_variable, schema.keys()))
-    return schema, variables

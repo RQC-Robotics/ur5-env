@@ -1,9 +1,9 @@
 """Digit sensor."""
-from typing import Literal
+from typing import Dict, Literal
 
 import numpy as np
 from dm_env import specs
-from digit_interface import Digit as _Digit
+from digit_interface import Digit as _Digit, DigitHandler
 
 from ur_env import types_ as types
 from ur_env.scene.nodes import base
@@ -15,7 +15,7 @@ class Digit(base.Node):
     def __init__(self,
                  serial: str,
                  resolution: Literal["VGA", "QVGA"] = "QVGA",
-                 fps: int = 60,
+                 fps: Literal["15fps", "30fps", "60fps"] = "30fps",
                  intensity: int = _Digit.LIGHTING_MAX,
                  name: str = "digit",
                  ) -> None:
@@ -24,13 +24,11 @@ class Digit(base.Node):
         FPS option vary per resolution: 30 or 15 for VGA; 60 or 30 for QVGA.
         """
         res = _Digit.STREAMS[resolution].copy()
-        default_fps = 30 if resolution == "VGA" else 60
-
         self._digit = _Digit(serial, name)
         self._digit.connect()
         self._digit.set_resolution(res)
         self._digit.set_intensity(intensity)
-        self._digit.set_fps(res["fps"].get(str(fps) + "fps", default_fps))
+        self._digit.set_fps(res["fps"].get(fps, "30fps"))
 
         self._reference_frame: np.ndarray = None
 
@@ -58,3 +56,11 @@ class Digit(base.Node):
 
     def close(self) -> None:
         self._digit.disconnect()
+
+    @property
+    def digit(self) -> _Digit:
+        return self._digit
+
+    @staticmethod
+    def list_digits() -> Dict[str, str]:
+        return DigitHandler.list_digits()

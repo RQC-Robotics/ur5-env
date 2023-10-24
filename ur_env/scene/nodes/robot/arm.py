@@ -1,9 +1,9 @@
 """UR5e arm."""
 import abc
 import time
-from typing import Optional
 from collections import OrderedDict
 
+import tree
 import numpy as np
 from dm_env import specs
 from rtde_receive import RTDEReceiveInterface
@@ -12,46 +12,42 @@ from dashboard_client import DashboardClient
 
 from ur_env import types_ as types, exceptions
 from ur_env.scene.nodes import base
-from ur_env.scene.nodes.robot.rtde_interfaces import (
-    load_schema, make_interfaces
-)
+from ur_env.scene.nodes.robot.rtde_interfaces import make_interfaces
 
 _2pi = 2 * np.pi
 _JOINT_LIMITS = np.float32([_2pi, _2pi, np.pi, _2pi, _2pi, _2pi])
 
 
 class ArmObservation:
-    """Calls RTDEReceive sequentially to obtain observations
-    specified in a scheme."""
+    """
+    Polls a RTDE Receive interface sequentially to obtain
+      the specified RTDE variables.
 
-    def __init__(self,
-                 rtde_r: RTDEReceiveInterface,
-                 schema: Optional[OrderedDict] = None,
-                 ) -> None:
-        self._rtde_r = rtde_r
-        if schema is None:
-            schema, _ = load_schema()
-        self._schema = schema
+    Variables can be redefined by those in RTDEReceive.get<var> methods.
+    """
+
+    variables = (
+        "ActualMomentum",
+        "ActualQ",
+        "ActualQd",
+        "ActualTCPForce",
+        "ActualTCPPose",
+        "ActualTCPSpeed",
+        "ActualToolAccelerometer",
+    )
+
+    def __init__(self, rtde_r: RTDEReceiveInterface) -> None:
+        self.rtde_r = rtde_r
 
     def __call__(self) -> types.Observation:
-        """Get all observations specified in the schema one by one."""
-        obs = OrderedDict()
-        for key in self._schema.keys():
-            value = getattr(self._rtde_r, f"get{key}")()
-            obs[key] = np.asarray(value)
-        return obs
+        vars_ = self.variables
+        vals = map(lambda var: getattr(self.rtde_r, "get" + var)(), vars_)
+        vals = map(np.atleast_1d, vals)
+        return OrderedDict(zip(vars_, vals))
 
     def observation_spec(self) -> types.ObservationSpec:
-        """Provide observation spec from the schema."""
-        obs_spec = OrderedDict()
-        _types = dict(int=int)
-        # Limits should also be inferred from the schema.
-        for key, spec_dict in self._schema.items():
-            obs_spec[key] = specs.Array(
-                shape=tuple(spec_dict["shape"]),
-                dtype=_types.get(spec_dict["dtype"], float)
-            )
-        return obs_spec
+        def to_spec(ar): return specs.Array(ar.shape, ar.dtype)
+        return tree.map_structure(to_spec, self())
 
 
 class ArmActionMode(base.Node):
@@ -62,7 +58,6 @@ class ArmActionMode(base.Node):
             host: str,
             port: int = 50003,
             frequency: int = 350,
-            schema: Optional[OrderedDict] = None,
             speed: float = .25,
             acceleration: float = 1.2,
             absolute_mode: bool = True,
@@ -74,7 +69,7 @@ class ArmActionMode(base.Node):
         work instead.
         """
         self.interfaces = make_interfaces(host, port, frequency)
-        self._observation = ArmObservation(self.rtde_receive, schema)
+        self._observation = ArmObservation(self.rtde_receive)
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
