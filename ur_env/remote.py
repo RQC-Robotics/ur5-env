@@ -81,7 +81,7 @@ class RemoteEnvClient(RemoteBase):
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock.connect(address)
-            _log.info("Connected to %s" % str(address))
+            _log.info("Connected to %s" % (address,))
         except (socket.timeout, socket.error):
             self._sock = None
             raise
@@ -152,7 +152,7 @@ class RemoteEnvServer(RemoteBase):
             sock.bind(address)
             sock.listen(1)
             self._sock, _ = sock.accept()
-            _log.info("Connection established to %s." % str(address))
+            _log.info("Connection established to %s." % (address,))
         except socket.error:
             self._sock = None
             raise

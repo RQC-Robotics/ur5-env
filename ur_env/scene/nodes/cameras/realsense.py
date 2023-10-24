@@ -103,12 +103,15 @@ class RealSense(base.Node):
 
     @property
     def pipeline(self) -> rs.pipeline:
+        """Access the pipeline."""
         return self._pipeline
 
     @property
     def config(self) -> rs.config:
+        """Access the config."""
         return self._config
 
     @property
     def profile(self) -> rs.pipeline_profile:
+        """Access the pipeline."""
         return self._profile

@@ -64,10 +64,12 @@ class Kinect(base.Node):
 
     @property
     def k4a(self) -> PyK4A:
+        """Access the camera instance."""
         return self._k4a
 
     @property
     def config(self) -> k4a_config.Config:
+        """Access the current config."""
         return self._config
 
 

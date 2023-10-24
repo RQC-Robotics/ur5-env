@@ -38,15 +38,17 @@ class Digit(base.Node):
         self._reference_frame = self._digit.get_frame().astype(np.float32)
 
     def get_observation(self) -> types.Observation:
+        """Capture frame and relative change from the previous init."""
         assert self._reference_frame is not None, "Init episode first."
         frame = self._digit.get_frame()
-        diff = np.float32(frame - self._reference_frame) / 255
+        diff = (frame.astype(np.float32) - self._reference_frame) / 255
         return {
             "sensor": frame,
             "sensor_diff": diff,
         }
 
     def observation_spec(self) -> types.ObservationSpec:
+        """RGB frame and relative difference map specs."""
         res = self._digit.resolution
         shape = (res["width"], res["height"])
         return {
@@ -59,8 +61,10 @@ class Digit(base.Node):
 
     @property
     def digit(self) -> _Digit:
+        """Access Digit."""
         return self._digit
 
     @staticmethod
     def list_digits() -> Dict[str, str]:
+        """Provide info about connected devices."""
         return DigitHandler.list_digits()

@@ -176,14 +176,17 @@ class ArmActionMode(base.Node):
 
     @property
     def rtde_receive(self) -> RTDEReceiveInterface:
+        """Access RTDE Receive interface."""
         return self.interfaces.rtde_receive
 
     @property
     def rtde_control(self) -> RTDEControlInterface:
+        """Access RTDE Control interface."""
         return self.interfaces.rtde_control
 
     @property
     def dashboard(self) -> DashboardClient:
+        """Access Dashboard client."""
         return self.interfaces.dashboard_client
 
 

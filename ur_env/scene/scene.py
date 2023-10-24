@@ -27,6 +27,7 @@ class Scene:
                 node.step(node_action)
 
     def initialize_episode(self, random_state: types.RNG) -> None:
+        """Reset statistics and prepare for a new episode."""
         for node in self._nodes.values():
             node.initialize_episode(random_state)
 

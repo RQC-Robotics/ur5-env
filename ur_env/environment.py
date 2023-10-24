@@ -150,23 +150,30 @@ class Environment:
 
     @property
     def scene(self) -> Scene:
+        """Access scene."""
         return self._scene
 
     @property
     def task(self) -> Task:
+        """Access task."""
         return self._task
 
     def observation_spec(self) -> types.ObservationSpec:
+        """Defines the observations provided by the environment."""
         return self._task.observation_spec(self._scene)
 
     def action_spec(self) -> types.ActionSpec:
+        """Defines the actions that should be provided to `step`."""
         return self._task.action_spec(self._scene)
 
     def reward_spec(self) -> specs.Array:
+        """Describes the reward returned by the environment."""
         return self._task.reward_spec()
 
     def discount_spec(self) -> specs.BoundedArray:
+        """Describes the discount returned by the environment."""
         return self._task.discount_spec()
 
     def close(self) -> None:
+        """Frees any resources used by the environment."""
         self._scene.close()
