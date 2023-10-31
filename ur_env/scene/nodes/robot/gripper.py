@@ -16,8 +16,8 @@ class GripperActionMode(base.Node):
             self,
             host: str,
             port: int = 63352,
-            force: int = 100,
-            speed: int = 100,
+            force: int = 255,
+            speed: int = 255,
             pos_limits: Optional[Tuple[int, int]] = None,
             absolute_mode: bool = True,
     ) -> None:
@@ -25,9 +25,8 @@ class GripperActionMode(base.Node):
         gripper = RobotiqGripper()
         gripper.connect(host, port)
 
-        def rescale(x): return int(255 * x / 100.)
-        self._speed = rescale(speed)
-        self._force = rescale(force)
+        self.speed = speed
+        self.force = force
         self._absolute = absolute_mode
         if pos_limits is None:
             gripper.activate(auto_calibrate=True)
@@ -42,9 +41,14 @@ class GripperActionMode(base.Node):
         self._obj_status: RobotiqGripper.ObjectStatus = None
         self._pos: int = None
 
-    def move(self, pos: int) -> Tuple[int, RobotiqGripper.ObjectStatus]:
-        response = self._gripper.move_and_wait_for_pos(
-            pos, self._speed, self._force)
+    def move(self,
+             pos: int,
+             speed: Optional[int] = None,
+             force: Optional[int] = None
+             ) -> Tuple[int, RobotiqGripper.ObjectStatus]:
+        speed = speed or self.speed
+        force = force or self.force
+        response = self._gripper.move_and_wait_for_pos(pos, speed, force)
         self._pos, self._obj_status = response
         return response
 

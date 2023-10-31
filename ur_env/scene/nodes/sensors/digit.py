@@ -19,14 +19,13 @@ class Digit(base.Node):
                  fps: Literal["15fps", "30fps", "60fps"] = "30fps",
                  intensity: int = _Digit.LIGHTING_MAX,
                  preheat_time: float = 5.,
-                 name: str = "digit",
                  ) -> None:
         """
         Serial can be found with digit_interface.DigitHandler.
         FPS option vary per resolution: 30 or 15 for VGA; 60 or 30 for QVGA.
         """
         res = _Digit.STREAMS[resolution].copy()
-        self._digit = _Digit(serial, name)
+        self._digit = _Digit(serial=serial, name=serial)
         self._digit.connect()
         self._digit.set_resolution(res)
         self._digit.set_intensity(intensity)
