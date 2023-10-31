@@ -1,4 +1,5 @@
 """Digit sensor."""
+import time
 from typing import Dict, Literal
 
 import numpy as np
@@ -17,6 +18,7 @@ class Digit(base.Node):
                  resolution: Literal["VGA", "QVGA"] = "QVGA",
                  fps: Literal["15fps", "30fps", "60fps"] = "30fps",
                  intensity: int = _Digit.LIGHTING_MAX,
+                 preheat_time: float = 5.,
                  name: str = "digit",
                  ) -> None:
         """
@@ -31,8 +33,9 @@ class Digit(base.Node):
         self._digit.set_fps(res["fps"].get(fps, "30fps"))
 
         self._reference_frame: np.ndarray = None
+        self._preheat(preheat_time)
 
-    def initialize_episode(self, random_state: np.random.Generator):
+    def initialize_episode(self, random_state: np.random.Generator) -> None:
         """Reference frame can be used to observe difference."""
         del random_state
         self._reference_frame = self._digit.get_frame().astype(np.float32)
@@ -68,3 +71,11 @@ class Digit(base.Node):
     def list_digits() -> Dict[str, str]:
         """Provide info about connected devices."""
         return DigitHandler.list_digits()
+
+    def _preheat(self, duration: float) -> None:
+        """Digit is required to heat up before obtaining stationary frame."""
+        delay = .1  # sec.
+        n_frames = int(duration // delay)
+        for _ in range(n_frames):
+            self._digit.get_frame()
+            time.sleep(delay)
