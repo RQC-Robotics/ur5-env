@@ -53,8 +53,7 @@ class RealSense(base.Node):
         """
         for depth, rgb in frames:
             depth_frame = self._temporal.process(depth)
-        pcd = rs.pointcloud()
-        points = pcd.calculate(depth_frame)
+        points = self._pc.calculate(depth_frame)
         return rgb, depth_frame, points
 
     def capture_frameset(self) -> Tuple[rs.depth_frame, rs.frame]:
@@ -62,7 +61,6 @@ class RealSense(base.Node):
         frameset = self._pipeline.wait_for_frames()
         frameset = self._align.process(frameset)
         depth = frameset.get_depth_frame()
-        #depth = self._decimation.process(depth)
         depth = self._hole_filling.process(depth)
         return depth, frameset.get_color_frame()
 
@@ -75,7 +73,6 @@ class RealSense(base.Node):
         self._align = rs.align(rs.stream.color)
         self._pc = rs.pointcloud()
         self._temporal = rs.temporal_filter(0.9, 20, 7)
-        self._decimation = rs.decimation_filter()
         self._hole_filling = rs.hole_filling_filter(1)
 
         self._config.enable_stream(

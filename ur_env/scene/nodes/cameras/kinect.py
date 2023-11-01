@@ -33,7 +33,6 @@ class Kinect(base.Node):
         """Be sure when using high color_res format or FPS
         since w/o GPU low latency depth map processing may be inaccessible.
         """
-        # TODO: add calibration.
         self._config = config
         self._k4a = PyK4A(config)
         self._k4a.start()
