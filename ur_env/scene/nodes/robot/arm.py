@@ -69,16 +69,14 @@ class ArmActionMode(base.Node):
         work instead.
         """
         self.interfaces = make_interfaces(host, port, frequency)
-        self._observation = ArmObservation(self.rtde_receive)
+        self._arm_observation = ArmObservation(self.rtde_receive)
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
         # Action should update at least one of the following estimations
         #   that are required for safety limits checks.
-        self._estim_tcp: types.TCPPose = None
-        self._estim_q: types.ActualQ = None
-        self._actual_tcp = None
-        self._actual_q = None
+        self._estim_tcp = self._estim_tcp = None
+        self._estim_q = self._actual_q = None
 
     def step(self, action: types.Action) -> None:
         self._pre_action(action)
@@ -87,16 +85,14 @@ class ArmActionMode(base.Node):
 
     def initialize_episode(self, random_state: np.random.Generator) -> None:
         del random_state
-        self._estim_tcp = None
-        self._estim_q = None
-        self._actual_tcp = None
-        self._actual_q = None
+        self._estim_tcp = self._estim_tcp = None
+        self._estim_q = self._actual_q = None
 
     def get_observation(self) -> types.Observation:
-        return self._observation()
+        return self._arm_observation()
 
     def observation_spec(self) -> types.ObservationSpec:
-        return self._observation.observation_spec()
+        return self._arm_observation.observation_spec()
 
     @abc.abstractmethod
     def _estimate_next(self, action: types.Action) -> None:
@@ -114,14 +110,13 @@ class ArmActionMode(base.Node):
         if self._estim_tcp is not None:
             if not rtde_c.isPoseWithinSafetyLimits(list(self._estim_tcp)):
                 raise exceptions.SafetyLimitsViolation(
-                    f"Pose safety limits violation: {self._estim_tcp}")
+                    f"TCPPose safety limits violation: {self._estim_tcp}")
         elif self._estim_q is not None:
             if not rtde_c.isJointsWithinSafetyLimits(list(self._estim_q)):
                 raise exceptions.SafetyLimitsViolation(
                     f"Joints safety limits violation: {self._estim_q}")
         else:
-            raise RuntimeError("At least one the safety limits estimation"
-                               " must be done.")
+            raise RuntimeError("At least one the safety limits estimation must be done.")
 
     def _post_action(self) -> None:
         """Checks if resulting pose is consistent with an estimation."""
@@ -136,25 +131,7 @@ class ArmActionMode(base.Node):
             dashboard.closeSafetyPopup()
             dashboard.unlockProtectiveStop()
             rtde_c.reuploadScript()
-
         self._update_state()
-        if (
-                self._estim_tcp is not None
-                and not np.allclose(self._estim_tcp, self._actual_tcp, atol=.1)
-        ):
-            raise exceptions.PoseEstimationError(
-                f"Estimated and Actual pose discrepancy:"
-                f"{self._estim_tcp} and {self._actual_tcp}."
-            )
-
-        if (
-                self._estim_q is not None
-                and not np.allclose(self._estim_q, self._actual_q, atol=.1)
-        ):
-            raise exceptions.PoseEstimationError(
-                f"Estimated and Actual Q discrepancy:"
-                f"{self._estim_q} and {self._actual_q}"
-            )
 
     @abc.abstractmethod
     def _act_fn(self, action: types.Action) -> bool:
@@ -190,7 +167,7 @@ class ArmActionMode(base.Node):
         return self.interfaces.dashboard_client
 
 
-class TCPPose(ArmActionMode):
+class ArmTCPPose(ArmActionMode):
     """Act on TCPPose(x,y,z,rx,ry,rz) by executing moveL comm.
 
     Absolute mode is specifying if control input is a relative difference or
@@ -209,12 +186,6 @@ class TCPPose(ArmActionMode):
             pose = np.asarray(pose)
             pose[:3] += pos
             self._estim_tcp = pose
-        # TODO: a_min depends on an installation TCP,
-        #  thus doesn't belong here.
-        self._estim_tcp[2] = np.clip(
-            self._estim_tcp[2],
-            a_min=0.04, a_max=np.inf
-        )
 
     def _act_fn(self, action: types.Action) -> bool:
         return self.rtde_control.moveL(
@@ -232,7 +203,7 @@ class TCPPose(ArmActionMode):
         )
 
 
-class JointsPosition(ArmActionMode):
+class ArmJointsPosition(ArmActionMode):
     """Act in joints space f64 q[6] by executing moveJ."""
 
     def _estimate_next(self, action: types.Action) -> None:

@@ -4,7 +4,7 @@ from typing import Tuple, Optional
 import numpy as np
 from dm_env import specs
 
-from ur_env import types_ as types
+import ur_env.types_ as types
 from ur_env.scene.nodes import base
 from .robotiq_gripper import RobotiqGripper
 
@@ -24,6 +24,7 @@ class GripperActionMode(base.Node):
         """Pos, speed and force are constrained to [0, 255]."""
         gripper = RobotiqGripper()
         gripper.connect(host, port)
+        self._gripper = gripper
 
         self.speed = speed
         self.force = force
@@ -36,7 +37,6 @@ class GripperActionMode(base.Node):
             gripper.activate(auto_calibrate=False)
             self._max_position, self._min_position = pos_limits
         self._delta = float(self._max_position - self._min_position)
-        self._gripper = gripper
 
         self._obj_status: RobotiqGripper.ObjectStatus = None
         self._pos: int = None
@@ -94,7 +94,7 @@ class GripperActionMode(base.Node):
         return getattr(self._gripper, name)
 
 
-class DiscreteGripper(GripperActionMode):
+class GripperDiscrete(GripperActionMode):
     """Fully open or close gripper."""
 
     def step(self, action: types.Action) -> None:
@@ -105,8 +105,8 @@ class DiscreteGripper(GripperActionMode):
         return specs.BoundedArray((), float, -1., 1.)
 
 
-class ContinuousGripper(GripperActionMode):
-    """Fine-grained control over a gripper."""
+class GripperContinuous(GripperActionMode):
+    """Fine-grained gripper control."""
 
     def step(self, action: types.Action) -> None:
         action = int(self._delta * (action + 1.) / 2 + self._min_position)

@@ -2,9 +2,7 @@
 from typing import Optional
 import abc
 
-import numpy as np
-
-from ur_env import types_ as types
+import ur_env.types_ as types
 
 
 class Node(abc.ABC):
@@ -16,7 +14,7 @@ class Node(abc.ABC):
     def step(self, action: types.Action) -> None:
         """Execute an action."""
 
-    def initialize_episode(self, random_state: np.random.Generator) -> None:
+    def initialize_episode(self, random_state: types.RNG) -> None:
         """Reset node statistics on a new episode."""
 
     @abc.abstractmethod

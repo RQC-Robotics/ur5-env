@@ -4,20 +4,18 @@ import numpy as np
 
 from ur_env.remote import RemoteEnvServer, RemoteEnvClient
 
-# dummy variables
-KEY = "observations"
-SHAPE = (24,)
-
 
 class MockEnv(dm_env.Environment):
-    """Class should be compliant with the dm_env.Environment API."""
-    _obs = {KEY: np.zeros(SHAPE)}
+    _KEY = "observations"
+    _OBS_SHAPE = (3,)
 
     def reset(self):
-        return dm_env.restart(self._obs)
+        obs = {self._KEY: np.random.normal(size=self._OBS_SHAPE)}
+        return dm_env.restart(obs)
 
     def step(self, action):
-        return dm_env.transition(reward=1, observation=self._obs)
+        obs = {self._KEY: np.random.normal(size=self._OBS_SHAPE)}
+        return dm_env.transition(reward=1, observation=obs)
 
     def action_spec(self):
         lim = np.ones(5)
@@ -29,7 +27,7 @@ class MockEnv(dm_env.Environment):
         )
 
     def observation_spec(self):
-        return {KEY: dm_env.specs.Array(SHAPE, np.float32)}
+        return {self._KEY: dm_env.specs.Array(self._OBS_SHAPE, np.float32)}
 
 
 def run_server(address):
@@ -53,3 +51,4 @@ if __name__ == "__main__":
     print(f"action: {client.step(action=None)}")
 
     client.close()
+    server.join()

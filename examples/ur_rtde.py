@@ -6,15 +6,14 @@ from dashboard_client import DashboardClient
 
 # Basic functionality can can be tested in a ursim.
 #   universal-robots.com/download/?filters[]=98916.
-host = "localhost"
-port = 50001  # default port
+HOST = "localhost"
 
 # This package calls robot's RTDE interface from Python via ur_rtde.
 #   sdurobotics.gitlab.io/ur_rtde/
 #   gitlab.com/sdurobotics/ur_rtde
-rtde_r = RTDEReceiveInterface(host)
-rtde_c = RTDEControlInterface(host)
-dashboard = DashboardClient(host)
+rtde_r = RTDEReceiveInterface(HOST)
+rtde_c = RTDEControlInterface(HOST)
+dashboard = DashboardClient(HOST)
 dashboard.connect()
 
 # 1. Various checks are available.

@@ -1,11 +1,11 @@
 """Intel RealSense via pyrealsense2."""
-from typing import List, Tuple
+from typing import Tuple
 
 import numpy as np
 from dm_env import specs
 import pyrealsense2 as rs
 
-from ur_env import types_ as types
+import ur_env.types_ as types
 from ur_env.scene.nodes import base
 
 
@@ -18,82 +18,62 @@ class RealSense(base.Node):
                  ) -> None:
         self._width = width
         self._height = height
-        self._build()
+        self._start_pipeline()
+
+        # dev.intelrealsense.com/docs/post-processing-filters#section-using-filters-in-application-code
+        # https://github.com/IntelRealSense/librealsense/issues/2073
+        # https://github.com/IntelRealSense/librealsense/issues/3735#issuecomment-482933434
+        self._hole_filling = rs.hole_filling_filter(1)
+        self._align = rs.align(rs.stream.depth)
+        self._pcd = rs.pointcloud()
+        # self._temporal = rs.temporal_filter(0.9, 20, 7)
 
     def get_observation(self) -> types.Observation:
-        frames = [self.capture_frameset() for _ in range(8)]
-        rgb, depth, points = self._postprocess(frames)
-        verts = np.asanyarray(points.get_vertices()).view(np.float32) \
-            .reshape(self._depth_height, self._depth_width, 3)
+        frames = self._pipeline.wait_for_frames()
+        rgb, depth, pcd = self.parse_frames(frames)
+        pcd = np.asanyarray(pcd.get_vertices()).view(np.float32) \
+            .reshape(self._height, self._width, 3)
         return {
             "depth": self._depth_scale * np.asanyarray(depth.get_data()),
             "image": np.asanyarray(rgb.get_data()),
-            "point_cloud": verts
-
+            "point_cloud": pcd
         }
 
     def observation_spec(self) -> types.ObservationSpec:
-        rgb_shape = (self._height, self._width)
-        depth_shape = (self._depth_height, self._depth_width)
+        shape = (self._height, self._width, 3)
         return {
-            "depth": specs.BoundedArray(
-                depth_shape, np.float32, 0, np.inf),
-            "image": specs.BoundedArray(
-                rgb_shape+(3,), np.uint8, 0, 255),
-            "point_cloud": specs.BoundedArray(
-                depth_shape+(3,), np.float32, 0, np.inf)
+            "depth": specs.BoundedArray(shape[:2], np.float32, 0, np.inf),
+            "image": specs.BoundedArray(shape, np.uint8, 0, 255),
+            "point_cloud": specs.BoundedArray(shape, np.float32, 0, np.inf)
         }
 
-    def _postprocess(self,
-                     frames: List[rs.frame]
+    def parse_frames(self,
+                     frames: rs.composite_frame
                      ) -> Tuple[rs.frame, rs.depth_frame, rs.pointcloud]:
-        """Process a sequence of frames.
-
-        Temporal processing is only useful for a static scene.
-        """
-        for depth, rgb in frames:
-            depth_frame = self._temporal.process(depth)
-        points = self._pc.calculate(depth_frame)
-        return rgb, depth_frame, points
-
-    def capture_frameset(self) -> Tuple[rs.depth_frame, rs.frame]:
-        """Obtains single frameset."""
-        frameset = self._pipeline.wait_for_frames()
-        frameset = self._align.process(frameset)
-        depth = frameset.get_depth_frame()
+        """Postprocess a frameset."""
+        frames = self._align.process(frames)
+        color = frames.get_color_frame()
+        depth = frames.get_depth_frame()
         depth = self._hole_filling.process(depth)
-        return depth, frameset.get_color_frame()
+        pcd = self._pcd.calculate(depth)
+        return color, depth, pcd
 
-    def _build(self) -> None:
-        """Most of the following is not required at all
-        but still present here to explore and remind of camera possibilities.
-        """
+    def _start_pipeline(self) -> None:
+        """Configuration steps."""
         self._pipeline = rs.pipeline()
         self._config = rs.config()
-        self._align = rs.align(rs.stream.color)
-        self._pc = rs.pointcloud()
-        self._temporal = rs.temporal_filter(0.9, 20, 7)
-        self._hole_filling = rs.hole_filling_filter(1)
-
-        self._config.enable_stream(
-            rs.stream.depth, width=self._width, height=self._height)
-        self._config.enable_stream(
-            rs.stream.color, width=self._width, height=self._height)
-
+        self._config.enable_stream(rs.stream.depth, width=self._width, height=self._height)
+        self._config.enable_stream(rs.stream.color, width=self._width, height=self._height)
         self._profile = self._pipeline.start(self._config)
         depth_sensor = self._profile.get_device().first_depth_sensor()
         self._depth_scale = np.float32(depth_sensor.get_depth_scale())
-
         # Set High Accuracy preset.
-        #depth_sensor = self._profile.get_device().first_depth_sensor()
-        #depth_sensor.set_option(rs.option.visual_preset, 3)
+        # depth_sensor = self._profile.get_device().first_depth_sensor()
+        # depth_sensor.set_option(rs.option.visual_preset, 3)
 
-        # Wait for an auto calibration and update shapes after processing.
-        # Decimation can change depth frame shape.
-        for _ in range(5):
-            depth, _ = self.capture_frameset()
-        self._depth_height, self._depth_width =\
-            np.asanyarray(depth.get_data()).shape
+        # Let auto exposure to set up.
+        for _ in range(10):
+            self._pipeline.wait_for_frames()
 
     def close(self) -> None:
         self._pipeline.stop()

@@ -5,7 +5,7 @@ import numpy as np
 from dm_env import specs
 from pyk4a import PyK4A, config as k4a_config
 
-from ur_env import types_ as types
+import ur_env.types_ as types
 from ur_env.scene.nodes import base
 
 _CR = k4a_config.ColorResolution
@@ -25,14 +25,13 @@ _DEFAULT_CONFIG = k4a_config.Config(
 class Kinect(base.Node):
     """Azure Kinect camera."""
 
-    _depth_scale = np.float32(1e-3)
+    DEPTH_SCALE = 1e-3  # mm to m
 
     def __init__(self,
                  config: k4a_config.Config = _DEFAULT_CONFIG,
                  ) -> None:
-        """Be sure when using high color_res format or FPS
-        since w/o GPU low latency depth map processing may be inaccessible.
-        """
+        """Default config comes with low FPS settings.
+        GPU is desirable to process depth maps w/o latency."""
         self._config = config
         self._k4a = PyK4A(config)
         self._k4a.start()
@@ -41,21 +40,17 @@ class Kinect(base.Node):
         """Captures an observation from the camera."""
         capture = self._k4a.get_capture()
         return {
-            "image": capture.color[:, :, 2::-1],
-            "depth": self._depth_scale * capture.transformed_depth,
-            "point_cloud":
-                self._depth_scale * capture.transformed_depth_point_cloud
+            "image": capture.color[..., 2::-1],  # BGRA -> RGB
+            "depth": Kinect.DEPTH_SCALE * capture.transformed_depth,
+            "point_cloud": Kinect.DEPTH_SCALE * capture.transformed_depth_point_cloud
         }
 
     def observation_spec(self) -> types.ObservationSpec:
         color_shape = _get_color_shape(self._config.color_resolution)
         return {
-            "image": specs.BoundedArray(
-                color_shape + (3,), np.uint8, 0, 255),
-            "depth": specs.BoundedArray(
-                color_shape, np.float32, 0, np.inf),
-            "point_cloud": specs.BoundedArray(
-                color_shape + (3,), np.float32, 0, np.inf)
+            "image": specs.BoundedArray(color_shape + (3,), np.uint8, 0, 255),
+            "depth": specs.BoundedArray(color_shape, np.float32, 0, np.inf),
+            "point_cloud": specs.BoundedArray(color_shape + (3,), np.float32, 0, np.inf)
         }
 
     def close(self):
@@ -73,17 +68,14 @@ class Kinect(base.Node):
 
 
 def _get_color_shape(cr: _CR) -> Tuple[int, int]:
+    """Enumerate possible resolution options."""
     # microsoft.github.io/Azure-Kinect-Sensor-SDK/master
-    if cr == _CR.RES_720P:
-        return 720, 1280
-    if cr == _CR.RES_1080P:
-        return 1080, 1920
-    if cr == _CR.RES_1440P:
-        return 1440, 2560
-    if cr == _CR.RES_1536P:
-        return 1536, 2048
-    if cr == _CR.RES_2160P:
-        return 2160, 3840
-    if cr == _CR.RES_3072P:
-        return 3072, 4096
-    raise ValueError(cr)
+    res = {
+        _CR.RES_720P: (720, 1280),
+        _CR.RES_1080P: (1080, 1920),
+        _CR.RES_1440P: (1440, 2560),
+        _CR.RES_1536P: (1536, 2048),
+        _CR.RES_2160P: (2160, 3840),
+        _CR.RES_3072P: (3072, 4096)
+    }
+    return res[cr]

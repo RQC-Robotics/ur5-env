@@ -1,34 +1,30 @@
 ## Description
 
-This repo allows to connect various physical devices to construct RL environments that use dm-env API.
+This repo connects various physical devices to construct environments that comply with the [dm_env](https://github.com/google-deepmind/dm_env) API.
 
-[rqcsuite/](ur_env/rqcsuite): collection of tasks for solving on a robot.
-
-[scene/](ur_env/scene): process all physical devices.
-
-- [nodes/](ur_env/scene/nodes): various devices that can provide information or be controlled by an agent. 
+#### Content:
+[scene/](ur_env/scene): physical environment description.
+- [nodes/](ur_env/scene/nodes): various devices that can provide information or be actuated. 
   - [cameras/](ur_env/scene/nodes/cameras): vision perception.
   - [robot/](ur_env/scene/nodes/robot): muscles.
   - [sensors/](ur_env/scene/nodes/sensors): tactile perception.
-- [scene.py](ur_env/scene/scene.py): hold, actuate and poll for observations every connected node.
+- [scene.py](ur_env/scene/scene.py): container serves to aggregate and dispatch information from/to nodes.
 
-[teleop/](ur_env/teleop): teleoperation via different controllers. This may require additional permissions like adding $USER to inputs group.
+[environment.py](ur_env/environment.py): task definition and RL environment wrapper.
 
-[remote.py](ur_env/remote.py): client and server to establish connection between robot and remote host.
-Can be used standalone with any dm_env.Environment.
+[teleop/](ur_env/teleop): teleoperation via different controllers. This may require additional installation steps.
 
-[environment.py](ur_env/environment.py): RL task and environment. 
+[remote.py](ur_env/remote.py): client and server connection for remote control. Can be used standalone with any dm_env.Environment.
 
 
 ## Installation
-
-Clone this repo and install all the listed packages and their requirements.
+A host requires all the packages:
 ```
-pip install .[all]
+pip install "ur_env[all] @ git+https://github.com/RQC-Robotics/ur5-env.git"
 ```
 
-__OR__ you probably only need `RemoteEnvClient` to connect to a robot from remote.
-Then install with `pip install .` or install `dm_env` and copy remote.py to a working dir.
+**OR** you probably only need `RemoteEnvClient` to connect to the host from remote.
+Then omit `[all]` or manually install `dm_env` and copy remote.py to a working dir.
 
 
 ## Examples

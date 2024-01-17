@@ -7,7 +7,8 @@ import dm_env
 from dm_env import specs
 import numpy as np
 
-from ur_env import types_ as types, exceptions
+import ur_env.types_ as types
+from ur_env import exceptions
 from ur_env.scene import Scene
 
 LOGNAME = "UREnv"
@@ -33,20 +34,19 @@ class Task(abc.ABC):
 
     @abc.abstractmethod
     def get_reward(self, scene: Scene) -> float:
-        """Calculate the reward signal given the physical state."""
+        """Calculate the reward signal given the physics state."""
 
     def get_termination(self, scene: Scene) -> bool:
-        """Determines whether the episode should terminate
-         given the scene state."""
+        """Determine whether episode should terminate."""
         return False
 
     def get_discount(self, scene: Scene) -> float:
         """Calculate the reward discount factor given the physical state."""
         return 1.0
 
+    @abc.abstractmethod
     def action_spec(self, scene: Scene) -> types.ActionSpec:
         """Task action specification."""
-        return scene.action_spec()
 
     def observation_spec(self, scene: Scene) -> types.ObservationSpec:
         """Task observation specification."""
@@ -57,7 +57,7 @@ class Task(abc.ABC):
         return specs.Array((), float)
 
     def discount_spec(self) -> specs.BoundedArray:
-        """Discounting factor specification."""
+        """Discount factor specification."""
         return specs.BoundedArray((), float, 0., 1.)
 
     @abc.abstractmethod
@@ -76,7 +76,7 @@ class Task(abc.ABC):
 
 
 class Environment:
-    """Ordinary RL environment."""
+    """RL environment wrapper."""
 
     def __init__(self,
                  random_state: Union[types.RNG, int],
@@ -129,9 +129,8 @@ class Environment:
             _log.warning(exc)
             self._violations += 1
             reward = 0.
-            is_terminal = \
-                isinstance(exc, exceptions.CriticalRTDEError) \
-                or self._violations >= self.max_violations
+            is_terminal = isinstance(exc, exceptions.CriticalRTDEError)
+            is_terminal |= self._violations >= self.max_violations
         else:
             reward = self._task.get_reward(self._scene)
             is_terminal = self._task.get_termination(self._scene)
@@ -159,7 +158,7 @@ class Environment:
         return self._task
 
     def observation_spec(self) -> types.ObservationSpec:
-        """Defines the observations provided by the environment."""
+        """Define the observations provided by the environment."""
         return self._task.observation_spec(self._scene)
 
     def action_spec(self) -> types.ActionSpec:

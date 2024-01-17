@@ -1,12 +1,12 @@
 """Digit sensor."""
 import time
-from typing import Dict, Literal
+from typing import Any, Dict, List, Literal
 
 import numpy as np
 from dm_env import specs
 from digit_interface import Digit as _Digit, DigitHandler
 
-from ur_env import types_ as types
+import ur_env.types_ as types
 from ur_env.scene.nodes import base
 
 
@@ -67,7 +67,7 @@ class Digit(base.Node):
         return self._digit
 
     @staticmethod
-    def list_digits() -> Dict[str, str]:
+    def list_digits() -> List[Dict[str, Any]]:
         """Provide info about connected devices."""
         return DigitHandler.list_digits()
 

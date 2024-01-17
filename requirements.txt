@@ -2,7 +2,8 @@ digit-interface
 dm-env
 evdev
 numpy
+openvr
 pyk4a
 pyrealsense2
-ruamel.YAML
+scipy
 ur_rtde

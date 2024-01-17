@@ -1,17 +1,13 @@
-"""Container for physical devices."""
+"""Container and dispatcher for physical devices."""
 from typing import MutableMapping, Dict
 from collections import OrderedDict
 
-from ur_env import types_ as types
+import ur_env.types_ as types
 from ur_env.scene.nodes.base import Node
 
 
 class Scene:
-    """Container for nodes.
-
-    Can be updated by performing an action on it
-    and then queried to obtain an observation.
-    """
+    """Aggregate/dispatch information from/to multiple nodes."""
 
     def __init__(self, **nodes: Node) -> None:
         """Create annotated container.
@@ -23,8 +19,7 @@ class Scene:
         """Dispatch actions to the nodes."""
         for name, node in self._nodes.items():
             node_action = action.get(name)
-            if node_action is not None:
-                node.step(node_action)
+            node.step(node_action)
 
     def initialize_episode(self, random_state: types.RNG) -> None:
         """Reset statistics and prepare for a new episode."""
@@ -63,7 +58,6 @@ class Scene:
             node.close()
 
     def __getattr__(self, item: str) -> Node:
-        # While making things easier it can cause troubles.
         try:
             return self._nodes[item]
         except KeyError as exc:
@@ -74,7 +68,7 @@ class Scene:
 
 
 def _name_mangling(node_name, obj, sep='/'):
-    """Annotate object with a name."""
+    """Annotate object with a node name."""
     if isinstance(obj, MutableMapping):
         mangled = type(obj)()
         for key, value in obj.items():
