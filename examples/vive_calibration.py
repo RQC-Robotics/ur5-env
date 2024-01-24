@@ -12,10 +12,10 @@ for _ in range(9):
     xs_world.append(offset)
 xs_world = center + np.asarray(xs_world)
 
-HOST = 'localhost'
+HOST = "localhost"
 rtde_r = rtde_receive.RTDEReceiveInterface(HOST)
 rtde_c = rtde_control.RTDEControlInterface(HOST)
-controller = ViveController('calibation.npz')
+controller = ViveController("calibation.npz")
 controller.calibrate(xs_world, rtde_c.moveL)
 
 
@@ -32,7 +32,7 @@ def actuate(vstate):
     rtde_c.servoL(list(new_pose), 0., 0., 0.01, 0.2, 100.)
 
 
-print('Ready')
+print("Ready")
 while True:
     state = controller.read_state()
     actuate(state)

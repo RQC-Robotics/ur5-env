@@ -1,9 +1,11 @@
 """Container and dispatcher for physical devices."""
-from typing import MutableMapping, Dict
+from typing import Dict, MutableMapping, Type
 from collections import OrderedDict
 
 import ur_env.types_ as types
 from ur_env.scene.nodes.base import Node
+
+SceneSignature = Dict[str, Type[Node]]
 
 
 class Scene:
@@ -56,6 +58,10 @@ class Scene:
         """Close all nodes."""
         for node in self._nodes.values():
             node.close()
+
+    def get_signature(self) -> SceneSignature:
+        """Describe contents of the scene."""
+        return {name: type(node) for name, node in self._nodes.items()}
 
     def __getattr__(self, item: str) -> Node:
         try:

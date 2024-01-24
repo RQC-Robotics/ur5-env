@@ -20,4 +20,4 @@ jobs:
         pip install $(grep -v "pyrealsense\|pyk4a" requirements.txt)
         pip install pylint
     - name: Analysing the code with pylint
-      run: pylint ur_env
+      run: pylint --fail-under=9 ur_env

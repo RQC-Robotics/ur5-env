@@ -12,21 +12,20 @@ from dashboard_client import DashboardClient
 
 from ur_env import types_ as types, exceptions
 from ur_env.scene.nodes import base
-from ur_env.scene.nodes.robot.rtde_interfaces import make_interfaces
+from ur_env.scene.nodes.robot.rtde_interfaces import make_interfaces, RobotInterfaces
 
 _2pi = 2 * np.pi
 _JOINT_LIMITS = np.float32([_2pi, _2pi, np.pi, _2pi, _2pi, _2pi])
 
 
-class ArmObservation:
-    """
-    Polls a RTDE Receive interface sequentially to obtain
-      the specified RTDE variables.
+class UR5e(base.Node):
+    """UR5e arm.
 
-    Variables can be redefined by those in RTDEReceive.get<var> methods.
+    Polls the RTDE Receive interface sequentially to obtain
+    a specified values.
     """
 
-    variables = (
+    VARIABLES = (
         "ActualMomentum",
         "ActualQ",
         "ActualQd",
@@ -36,40 +35,73 @@ class ArmObservation:
         "ActualToolAccelerometer",
     )
 
-    def __init__(self, rtde_r: RTDEReceiveInterface) -> None:
-        self.rtde_r = rtde_r
+    def __init__(
+            self,
+            host: str,
+            port: int = 50003,
+            frequency: float = 350.,
+    ) -> None:
+        """All information is provided via ur_rtde.
+        The RTDE variables description can be found there."""
+        self._interfaces = make_interfaces(host, port, frequency)
 
-    def __call__(self) -> types.Observation:
-        vars_ = self.variables
-        vals = map(lambda var: getattr(self.rtde_r, "get" + var)(), vars_)
+    def get_observation(self) -> types.Observation:
+        vars_ = self.VARIABLES
+        vals = map(lambda var: getattr(self.rtde_receive, "get" + var)(), vars_)
         vals = map(np.atleast_1d, vals)
         return OrderedDict(zip(vars_, vals))
 
     def observation_spec(self) -> types.ObservationSpec:
         def to_spec(ar): return specs.Array(ar.shape, ar.dtype)
-        return tree.map_structure(to_spec, self())
+        return tree.map_structure(to_spec, self.get_observation())
+
+    def close(self) -> None:
+        self.rtde_control.disconnect()
+        self.rtde_receive.disconnect()
+        self.dashboard.disconnect()
+
+    @property
+    def robot_interfaces(self) -> RobotInterfaces:
+        """Access all interfaces."""
+        return self._interfaces
+
+    @property
+    def rtde_receive(self) -> RTDEReceiveInterface:
+        """Access RTDE Receive interface."""
+        return self._interfaces.rtde_receive
+
+    @property
+    def rtde_control(self) -> RTDEControlInterface:
+        """Access RTDE Control interface."""
+        return self._interfaces.rtde_control
+
+    @property
+    def dashboard(self) -> DashboardClient:
+        """Access Dashboard client."""
+        return self._interfaces.dashboard_client
 
 
-class ArmActionMode(base.Node):
-    """UR5e arm."""
+class _ArmActionMode(abc.ABC, UR5e):
+    """Controllable node."""
 
     def __init__(
             self,
             host: str,
             port: int = 50003,
-            frequency: int = 350,
+            frequency: float = 350.,
             speed: float = .25,
             acceleration: float = 1.2,
             absolute_mode: bool = True,
     ) -> None:
-        """Schema specifies desirable observables: name, shape, dtype.
+        """Preprocess and actuate an arm.
 
-        Absolute flag switches between absolute or relative coordinates change.
-        Interfaces should not be closed by the class. Scene should finalize
-        work instead.
+        Args:
+            speed: RTDE Control variable.
+            acceleration: RTDE Control variable.
+            absolute_mode: defines if a controlling signal is
+              absolute or relative change to current state.
         """
-        self.interfaces = make_interfaces(host, port, frequency)
-        self._arm_observation = ArmObservation(self.rtde_receive)
+        super().__init__(host=host, port=port, frequency=frequency)
         self._speed = speed
         self._acceleration = acceleration
         self._absolute = absolute_mode
@@ -87,12 +119,6 @@ class ArmActionMode(base.Node):
         del random_state
         self._estim_tcp = self._estim_tcp = None
         self._estim_q = self._actual_q = None
-
-    def get_observation(self) -> types.Observation:
-        return self._arm_observation()
-
-    def observation_spec(self) -> types.ObservationSpec:
-        return self._arm_observation.observation_spec()
 
     @abc.abstractmethod
     def _estimate_next(self, action: types.Action) -> None:
@@ -120,7 +146,7 @@ class ArmActionMode(base.Node):
 
     def _post_action(self) -> None:
         """Checks if resulting pose is consistent with an estimation."""
-        rtde_c, rtde_r, dashboard = self.interfaces
+        rtde_c, rtde_r, dashboard = self._interfaces
         if rtde_r.getSafetyMode() > 1:
             raise exceptions.ProtectiveStop(
                 "Safety mode is not in a normal or reduced mode.")
@@ -146,28 +172,8 @@ class ArmActionMode(base.Node):
         self._actual_tcp = np.asarray(self.rtde_receive.getActualTCPPose())
         self._actual_q = np.asarray(self.rtde_receive.getActualQ())
 
-    def close(self) -> None:
-        self.rtde_control.disconnect()
-        self.rtde_receive.disconnect()
-        self.dashboard.disconnect()
 
-    @property
-    def rtde_receive(self) -> RTDEReceiveInterface:
-        """Access RTDE Receive interface."""
-        return self.interfaces.rtde_receive
-
-    @property
-    def rtde_control(self) -> RTDEControlInterface:
-        """Access RTDE Control interface."""
-        return self.interfaces.rtde_control
-
-    @property
-    def dashboard(self) -> DashboardClient:
-        """Access Dashboard client."""
-        return self.interfaces.dashboard_client
-
-
-class ArmTCPPose(ArmActionMode):
+class ArmTCPPose(_ArmActionMode):
     """Act on TCPPose(x,y,z,rx,ry,rz) by executing moveL comm.
 
     Absolute mode is specifying if control input is a relative difference or
@@ -203,7 +209,7 @@ class ArmTCPPose(ArmActionMode):
         )
 
 
-class ArmJointsPosition(ArmActionMode):
+class ArmJointsPosition(_ArmActionMode):
     """Act in joints space f64 q[6] by executing moveJ."""
 
     def _estimate_next(self, action: types.Action) -> None:

@@ -61,7 +61,7 @@ def make_interfaces(
 
     rtde_r = RTDEReceiveInterface(
         host,
-        frequency=frequency,
+        frequency=float(frequency),
     )
     assert rtde_r.isConnected()
 

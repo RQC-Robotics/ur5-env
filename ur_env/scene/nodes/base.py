@@ -12,7 +12,7 @@ class Node(abc.ABC):
     """
 
     def step(self, action: types.Action) -> None:
-        """Execute an action."""
+        """Execute an action. Default is no-op."""
 
     def initialize_episode(self, random_state: types.RNG) -> None:
         """Reset node statistics on a new episode."""
@@ -27,7 +27,6 @@ class Node(abc.ABC):
 
     def action_spec(self) -> Optional[types.ActionSpec]:
         """Action specification or None if the node is uncontrollable."""
-        return None
 
     def close(self) -> None:
         """Finalize work: terminate connection, release resources, etc."""

@@ -74,6 +74,11 @@ class Task(abc.ABC):
                    ) -> None:
         """Post action step."""
 
+    @classmethod
+    def is_compatible_scene(cls, scene: Scene) -> bool:
+        """SceneSignature can be used to check if a scene has required nodes."""
+        return True
+
 
 class Environment:
     """RL environment wrapper."""
@@ -91,10 +96,12 @@ class Environment:
             scene: physical robot setup.
             task: RL task definition.
             time_limit: maximum number of interactions before episode truncation.
-            max_violations_num: max. number of suppressed exceptions until
+            max_violations_num: number of suppressed exceptions until
                 early episode termination occurs.
                 Critical exceptions still will be raised on a first occurrence.
         """
+        if not task.is_compatible_scene(scene):
+            raise RuntimeError("The scene is incompatible with the task.")
         self._rng = np.random.default_rng(random_state)
         self._scene = scene
         self._task = task
@@ -149,12 +156,12 @@ class Environment:
 
     @property
     def scene(self) -> Scene:
-        """Access scene."""
+        """Access the scene."""
         return self._scene
 
     @property
     def task(self) -> Task:
-        """Access task."""
+        """Access the task."""
         return self._task
 
     def observation_spec(self) -> types.ObservationSpec:

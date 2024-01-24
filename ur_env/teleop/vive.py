@@ -1,14 +1,15 @@
+"""HTC VIVE Controller."""
 import os
-from typing import Callable, NamedTuple, Tuple
+from typing import Callable, NamedTuple, Optional, Tuple
 
 import openvr
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-__all__ = ('ViveState', 'ViveCalibration', 'ViveController')
+__all__ = ("ViveState", "ViveCalibration", "ViveController")
 
 Array = np.ndarray
-DEFAULT_CALIBRATION_PATH = os.path.join(os.path.dirname(__file__), 'calibration.npz')
+DEFAULT_CALIBRATION_PATH = os.path.join(os.path.dirname(__file__), "calibration.npz")
 
 
 class ViveState(NamedTuple):
@@ -29,7 +30,7 @@ class ViveState(NamedTuple):
     def from_openvr(cls,
                     state: openvr.VRControllerState_t,
                     pose: openvr.TrackedDevicePose_t,
-                    ) -> 'ViveState':
+                    ) -> "ViveState":
         """Parse fields according to the OpenVR API."""
         # kudos to https://gist.github.com/awesomebytes/75daab3adb62b331f21ecf3a03b3ab46
         def as_np(x): return np.asarray(x[:], dtype=np.float32)
@@ -51,7 +52,6 @@ class ViveState(NamedTuple):
         )
 
 
-# TODO: angular velocity definition is unclear; consult the API, verify the calibration implemented in a right way.
 class ViveCalibration(NamedTuple):
     """Reference frame transformation."""
 
@@ -71,7 +71,7 @@ class ViveCalibration(NamedTuple):
         )
 
     @classmethod
-    def infer(cls, xs_this: Array, xs_other: Array) -> 'ViveCalibration':
+    def infer(cls, xs_this: Array, xs_other: Array) -> "ViveCalibration":
         """Given N x [x, y, z, rpx, rpy, rpz] coordinate pairs find a matching transformation
         such that X_other = Calib @ X_this.
         """
@@ -86,13 +86,13 @@ class ViveCalibration(NamedTuple):
         return cls(rigid_transform, orientation_transform)
 
     @classmethod
-    def identity(cls) -> 'ViveCalibration':
+    def identity(cls) -> "ViveCalibration":
         """Id."""
         rt = np.zeros((3, 4))
         rt[:3, :3] = np.eye(3)
         return cls(rt, Rotation.identity())
 
-    def inverse(self) -> 'ViveCalibration':
+    def inverse(self) -> "ViveCalibration":
         """Inverse transformation."""
         rrot, rtrans = _split_pmat(self.rigid_transform)
         itrans = - rrot.T @ rtrans
@@ -105,10 +105,10 @@ class ViveCalibration(NamedTuple):
         np.savez(path, rt=self.rigid_transform, ot=self.orientation_transform.as_matrix())
 
     @classmethod
-    def load(cls, path: os.PathLike) -> 'ViveCalibration':
+    def load(cls, path: os.PathLike) -> "ViveCalibration":
         """Deserialize calibration."""
         data = np.load(path)
-        return cls(data['rt'], Rotation.from_matrix(data['ot']))
+        return cls(data["rt"], Rotation.from_matrix(data["ot"]))
 
 
 # TODO: handle loss of sight.
@@ -131,11 +131,11 @@ class ViveController:
         """Process an event."""
         cidx = self.get_controller_device_idx()
         if cidx == ViveController.NONE_IDX:
-            raise RuntimeError('Controller is not found')
+            raise RuntimeError("Controller is not found")
         success, state, pose = self.vr.getControllerStateWithPose(
                 openvr.TrackingUniverseStanding, cidx)
         if not success:
-            raise RuntimeError('Unable to fetch data.')
+            raise RuntimeError("Unable to fetch data.")
         state = ViveState.from_openvr(state, pose)
         if self._calibration is not None:
             state = self._calibration.apply(state)
@@ -158,13 +158,14 @@ class ViveController:
         Callback is here primary for a UR5e move command.
         """
         xs_w = np.asarray(xs_world)
-        assert xs_w.ndim == 2 and xs_w.shape[1] == 6, 'N x [xyz, rotvec].'
-        assert self._calibration is None, 'Calibration exists.'
+        assert xs_w.ndim == 2 and xs_w.shape[1] == 6, "N x [xyz, rotvec]."
+        if self.is_calibrated():
+            raise RuntimeError("A calibration already exists.")
         xs_c = []
         print("Verify position with the trigger button.")
         state = self.read_state()
         for idx, x_w in enumerate(xs_w):
-            print(f'Pose {idx}: {x_w}')
+            print(f"Pose {idx}: {x_w}")
             on_pose_callback(x_w)
             while state.trigger != 1.:
                 state = self.read_state()
@@ -177,6 +178,15 @@ class ViveController:
         self._calibration = ViveCalibration.infer(xs_c, xs_w)
         self._calibration.save(self.calibration_config)
         return self._calibration._replace()
+
+    def is_calibrated(self) -> bool:
+        """Check if controller is calibrated."""
+        return self._calibration is not None
+
+    @property
+    def calibration(self) -> Optional[ViveCalibration]:
+        """Access the calibration."""
+        return self._calibration
 
 
 def _split_pmat(x: Array) -> Tuple[Array, Array]:
