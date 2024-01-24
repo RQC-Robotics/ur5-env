@@ -81,7 +81,7 @@ class UR5e(base.Node):
         return self._interfaces.dashboard_client
 
 
-class _ArmActionMode(abc.ABC, UR5e):
+class _ArmActionMode(UR5e):
     """Controllable node."""
 
     def __init__(
@@ -107,7 +107,7 @@ class _ArmActionMode(abc.ABC, UR5e):
         self._absolute = absolute_mode
         # Action should update at least one of the following estimations
         #   that are required for safety limits checks.
-        self._estim_tcp = self._estim_tcp = None
+        self._estim_tcp = self._actual_tcp = None
         self._estim_q = self._actual_q = None
 
     def step(self, action: types.Action) -> None:
@@ -117,7 +117,7 @@ class _ArmActionMode(abc.ABC, UR5e):
 
     def initialize_episode(self, random_state: np.random.Generator) -> None:
         del random_state
-        self._estim_tcp = self._estim_tcp = None
+        self._estim_tcp = self._actual_tcp = None
         self._estim_q = self._actual_q = None
 
     @abc.abstractmethod

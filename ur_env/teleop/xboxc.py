@@ -2,7 +2,7 @@
 from typing import Callable, Dict, Union
 from enum import IntEnum
 
-from evdev import InputDevice, ecodes
+from evdev import InputDevice
 
 from ur_env.types_ import Action
 

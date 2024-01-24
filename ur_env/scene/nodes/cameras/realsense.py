@@ -61,16 +61,16 @@ class RealSense(base.Node):
     def _start_pipeline(self) -> None:
         """Configuration steps."""
         self._pipeline = rs.pipeline()
-        self._config = rs.config()
-        self._config.enable_stream(rs.stream.depth, width=self._width, height=self._height)
-        self._config.enable_stream(rs.stream.color, width=self._width, height=self._height)
-        self._profile = self._pipeline.start(self._config)
+        config = rs.config()
+        config.enable_stream(rs.stream.depth, width=self._width, height=self._height)
+        config.enable_stream(rs.stream.color, width=self._width, height=self._height)
+        self._profile = self._pipeline.start(config)
+        self._config = config
         depth_sensor = self._profile.get_device().first_depth_sensor()
         self._depth_scale = np.float32(depth_sensor.get_depth_scale())
         # Set High Accuracy preset.
         # depth_sensor = self._profile.get_device().first_depth_sensor()
         # depth_sensor.set_option(rs.option.visual_preset, 3)
-
         # Let auto exposure to set up.
         for _ in range(10):
             self._pipeline.wait_for_frames()

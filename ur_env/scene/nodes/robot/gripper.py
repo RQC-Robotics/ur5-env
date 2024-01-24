@@ -16,6 +16,7 @@ class Robotiq2F85(base.Node):
     ObjectStatus = RobotiqGripper.ObjectStatus
 
     class GripperState(NamedTuple):
+        """A gripper relevant variables."""
         status: RobotiqGripper.GripperStatus
         object_status: RobotiqGripper.ObjectStatus
         position_request: int

@@ -15,6 +15,7 @@ LOGNAME = "UREnv"
 _log = logging.getLogger(LOGNAME)
 
 
+# pylint: disable=unused-argument
 class Task(abc.ABC):
     """Defines relevant for a task methods.
 
