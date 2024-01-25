@@ -102,9 +102,9 @@ class _ArmActionMode(UR5e):
               absolute or relative change to current state.
         """
         super().__init__(host=host, port=port, frequency=frequency)
-        self._speed = speed
-        self._acceleration = acceleration
-        self._absolute = absolute_mode
+        self.speed = speed
+        self.acceleration = acceleration
+        self.absolute_mode = absolute_mode
         # Action should update at least one of the following estimations
         #   that are required for safety limits checks.
         self._estim_tcp = self._actual_tcp = None
@@ -181,7 +181,7 @@ class ArmTCPPose(_ArmActionMode):
     """
 
     def _estimate_next(self, action: types.Action) -> None:
-        if self._absolute:
+        if self.absolute_mode:
             self._estim_tcp = action
         else:
             pos, rot = np.split(action, [3])
@@ -196,8 +196,8 @@ class ArmTCPPose(_ArmActionMode):
     def _act_fn(self, action: types.Action) -> bool:
         return self.rtde_control.moveL(
             pose=list(self._estim_tcp),
-            speed=self._speed,
-            acceleration=self._acceleration
+            speed=self.speed,
+            acceleration=self.acceleration
         )
 
     def action_spec(self) -> types.ActionSpec:
@@ -213,7 +213,7 @@ class ArmJointsPosition(_ArmActionMode):
     """Act in joints space f64 q[6] by executing moveJ."""
 
     def _estimate_next(self, action: types.Action) -> None:
-        if self._absolute:
+        if self.absolute_mode:
             self._estim_q = action
         else:
             self._estim_q = action + self._actual_q
@@ -226,8 +226,8 @@ class ArmJointsPosition(_ArmActionMode):
     def _act_fn(self, action: types.Action) -> bool:
         return self.rtde_control.moveJ(
             q=list(self._estim_q),
-            speed=self._speed,
-            acceleration=self._acceleration
+            speed=self.speed,
+            acceleration=self.acceleration
         )
 
     def action_spec(self) -> types.ActionSpec:

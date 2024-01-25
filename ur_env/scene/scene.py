@@ -73,7 +73,7 @@ class Scene:
         return self._nodes[item]
 
 
-def _name_mangling(node_name, obj, sep='/'):
+def _name_mangling(node_name, obj, sep="/"):
     """Annotate object with a node name."""
     if isinstance(obj, MutableMapping):
         mangled = type(obj)()
