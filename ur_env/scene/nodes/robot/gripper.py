@@ -43,7 +43,7 @@ class Robotiq2F85(base.Node):
             self._min_position = gripper.get_min_position()
         else:
             gripper.activate(auto_calibrate=False)
-            self._max_position, self._min_position = pos_limits
+            self._min_position, self._max_position = pos_limits
         self._delta = float(self._max_position - self._min_position)
 
     def move(self,

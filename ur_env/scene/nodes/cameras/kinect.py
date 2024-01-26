@@ -26,6 +26,7 @@ class Kinect(base.Node):
     """Azure Kinect camera."""
 
     DEPTH_SCALE = 1e-3  # mm to m
+    k4a_config = k4a_config
 
     def __init__(self,
                  config: k4a_config.Config = _DEFAULT_CONFIG,

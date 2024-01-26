@@ -41,7 +41,7 @@ class _DashboardClient(DashboardClient):
 
 def make_interfaces(
         host: str,
-        port: int = 50003,
+        port: int = 50002,
         frequency: float = -1.,
 ) -> RobotInterfaces:
     """Interfaces to communicate with the robot.

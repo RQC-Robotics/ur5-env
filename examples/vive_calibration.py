@@ -9,8 +9,8 @@ center = np.float32([-0.5, 0, 0.3, 2.2, 2.2, 0])
 xs_world = []
 for _ in range(9):
     offset = [np.random.uniform(-0.15, 0.15, 3), np.random.uniform(-0.4, 0.4, 3)]
-    xs_world.append(offset)
-xs_world = center + np.asarray(xs_world)
+    xs_world.append(np.concatenate(offset, -1))
+xs_world = center[np.newaxis] + np.asarray(xs_world)
 
 HOST = "localhost"
 rtde_r = rtde_receive.RTDEReceiveInterface(HOST)

@@ -38,7 +38,7 @@ class UR5e(base.Node):
     def __init__(
             self,
             host: str,
-            port: int = 50003,
+            port: int = 50002,
             frequency: float = 350.,
     ) -> None:
         """All information is provided via ur_rtde.
@@ -87,7 +87,7 @@ class _ArmActionMode(UR5e):
     def __init__(
             self,
             host: str,
-            port: int = 50003,
+            port: int = 50002,
             frequency: float = 350.,
             speed: float = .25,
             acceleration: float = 1.2,
