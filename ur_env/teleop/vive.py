@@ -9,11 +9,10 @@ from scipy.spatial.transform import Rotation
 __all__ = ("ViveState", "ViveCalibration", "ViveController")
 
 Array = np.ndarray
-DEFAULT_CALIBRATION_PATH = os.path.join(os.path.dirname(__file__), "calibration.npz")
 
 
 class ViveState(NamedTuple):
-    """Data accessible from VIVE controller."""
+    """Data accessible from a VIVE controller."""
 
     position: Array
     rotation: Rotation
@@ -111,13 +110,10 @@ class ViveCalibration(NamedTuple):
         return cls(data["rt"], Rotation.from_matrix(data["ot"]))
 
 
-# TODO: handle loss of sight.
 class ViveController:
-    """Expose VIVE controller's state and """
+    """Use OpenVR to get controller's state."""
 
-    NONE_IDX = -1
-
-    def __init__(self, calibration_config: os.PathLike = DEFAULT_CALIBRATION_PATH) -> None:
+    def __init__(self, calibration_config: os.PathLike) -> None:
         """Specified path will be used to save/load calibration."""
         self.vr = openvr.init(openvr.VRApplication_Other)
         self.vrsys = openvr.VRSystem()
@@ -130,24 +126,22 @@ class ViveController:
     def read_state(self) -> ViveState:
         """Process an event."""
         cidx = self.get_controller_device_idx()
-        if cidx == ViveController.NONE_IDX:
-            raise RuntimeError("Controller is not found")
         success, state, pose = self.vr.getControllerStateWithPose(
                 openvr.TrackingUniverseStanding, cidx)
         if not success:
             raise RuntimeError("Unable to fetch data.")
         state = ViveState.from_openvr(state, pose)
-        if self._calibration is not None:
+        if self.is_calibrated():
             state = self._calibration.apply(state)
         return state
 
     def get_controller_device_idx(self) -> int:
-        """Return first controller vr_idx if any."""
+        """Return the first controller vr_idx if any."""
         for idx in range(openvr.k_unMaxTrackedDeviceCount):
             device_class = self.vrsys.getTrackedDeviceClass(idx)
             if device_class == openvr.TrackedDeviceClass_Controller:
                 return idx
-        return ViveController.NONE_IDX
+        raise RuntimeError("Controller is not found.")
 
     def calibrate(self,
                   xs_world: Array,
@@ -187,6 +181,12 @@ class ViveController:
     def calibration(self) -> Optional[ViveCalibration]:
         """Access the calibration."""
         return self._calibration
+
+    def close(self) -> None:
+        """Shutdown OpenVR."""
+        self.vr = None
+        self.vrsys = None
+        openvr.shutdown()
 
 
 def _split_pmat(x: Array) -> Tuple[Array, Array]:
