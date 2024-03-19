@@ -152,9 +152,10 @@ class RemoteEnvServer(_RemoteBase):
         try:
             sock = socket.socket()
             sock.bind(address)
+            _log.info("Listening on %s.", address)
             sock.listen(1)
             self._sock, _ = sock.accept()
-            _log.info("Connected to %s.", address)
+            _log.info("Client connected.")
         except socket.error:
             self._sock = None
             raise

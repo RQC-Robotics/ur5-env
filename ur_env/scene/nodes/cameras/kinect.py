@@ -31,18 +31,20 @@ class Kinect(base.Node):
 
     def __init__(self,
                  config: k4a_config.Config = _DEFAULT_CONFIG,
-                 depth_aligned: bool = False
+                 depth_aligned: bool = False,
+                 capture_timeout: float = PyK4A.TIMEOUT_WAIT_INFINITE  # time in mseconds.
                  ) -> None:
         """Default config comes with low FPS settings.
         GPU is desirable to process depth maps w/o latency."""
         self._config = config
         self.depth_aligned = depth_aligned
+        self.capture_timeout = capture_timeout
         self._k4a = PyK4A(config)
         self._k4a.start()
 
     def get_observation(self) -> types.Observation:
         """Captures an observation from the camera."""
-        capture = self._k4a.get_capture()
+        capture = self._k4a.get_capture(self.capture_timeout)
         rgb = capture.transformed_color if self.depth_aligned else capture.color
         depth = capture.depth if self.depth_aligned else capture.transformed_depth
         pcd = capture.depth_point_cloud if self.depth_aligned else capture.transformed_depth_point_cloud
